@@ -73,9 +73,23 @@ const I18N = {
     deviceScope: "قسم الجهاز",
     allDevices: "كل الأجهزة",
     addDevice: "إضافة نوع جهاز",
+    editDevice: "تعديل نوع الجهاز",
     devices: "أنواع الأجهزة",
     deviceNameAr: "الاسم بالعربي",
     deviceNameEn: "الاسم بالإنجليزي",
+    projectInfo: "معلومات المشروع",
+    infoFields: "حقول معلومات المشروع",
+    addField: "إضافة حقل",
+    editField: "تعديل حقل",
+    fieldType: "نوع الحقل",
+    fieldText: "نص",
+    fieldLong: "نص طويل",
+    fieldDevice: "نوع جهاز",
+    customizeFields: "تخصيص الحقول",
+    infoFieldsHint: "مدير المشاريع يحدد الحقول التي تظهر في معلومات كل مشروع.",
+    savedOk: "تم الحفظ",
+    coreField: "حقل أساسي لا يمكن حذفه.",
+    lastDevice: "يجب الإبقاء على نوع جهاز واحد على الأقل.",
     allProjects: "كل المشاريع",
     projectReport: "تقرير المشروع",
     role: "الدور",
@@ -207,9 +221,23 @@ const I18N = {
     deviceScope: "Device department",
     allDevices: "All devices",
     addDevice: "Add device type",
+    editDevice: "Edit device type",
     devices: "Device types",
     deviceNameAr: "Arabic name",
     deviceNameEn: "English name",
+    projectInfo: "Project information",
+    infoFields: "Project info fields",
+    addField: "Add field",
+    editField: "Edit field",
+    fieldType: "Field type",
+    fieldText: "Text",
+    fieldLong: "Long text",
+    fieldDevice: "Device type",
+    customizeFields: "Customize fields",
+    infoFieldsHint: "The project manager chooses which fields appear in each project's information.",
+    savedOk: "Saved",
+    coreField: "This is a required field and cannot be deleted.",
+    lastDevice: "Keep at least one device type.",
     allProjects: "All projects",
     projectReport: "Project report",
     role: "Role",
@@ -425,9 +453,32 @@ function defaultDevices() {
   ];
 }
 
+function defaultInfoFields() {
+  return [
+    { id: "name", ar: "اسم المشروع", en: "Project name", type: "text", core: true },
+    { id: "hospital", ar: "المستشفى / الموقع", en: "Hospital / site", type: "text" },
+    { id: "device", ar: "نوع الجهاز", en: "Device type", type: "device", core: true }
+  ];
+}
+
+function fieldLabel(field) {
+  if (!field) return "";
+  return state.lang === "ar" ? field.ar : field.en;
+}
+
+function projectInfoValue(project, field) {
+  if (!project || !field) return "";
+  if (project.info && project.info[field.id] != null && project.info[field.id] !== "") return String(project.info[field.id]);
+  if (field.id === "name") return project.name || "";
+  if (field.id === "hospital") return project.hospital || "";
+  if (field.id === "device") return project.device || "";
+  return "";
+}
+
 function seed() {
   return {
     devices: defaultDevices(),
+    infoFields: defaultInfoFields(),
     users: [
       { id: "u1", username: "manager", password: "manager123", role: "pm", deviceScope: "all", roleTitle: "", name: "مدير المشاريع", email: "picassomega86@gmail.com" },
       { id: "u2", username: "viewer", password: "viewer123", role: "other", deviceScope: "all", roleTitle: "مراقب ميداني", name: "مراقب ميداني", email: "" }
@@ -438,10 +489,13 @@ function seed() {
 
 function migrate(data) {
   if (!Array.isArray(data.devices) || !data.devices.length) data.devices = defaultDevices();
+  if (!Array.isArray(data.infoFields) || !data.infoFields.length) data.infoFields = defaultInfoFields();
   else {
-    defaultDevices().forEach((d) => {
-      if (!data.devices.some((x) => x.id === d.id)) data.devices.push(d);
-    });
+    defaultInfoFields()
+      .filter((f) => f.core)
+      .forEach((f) => {
+        if (!data.infoFields.some((x) => x.id === f.id)) data.infoFields.unshift(f);
+      });
   }
   (data.users || []).forEach((u) => {
     if (u.role === "viewer") {
@@ -454,6 +508,10 @@ function migrate(data) {
   });
   (data.projects || []).forEach((p) => {
     if (!p.files) p.files = [];
+    if (!p.info) p.info = {};
+    if (p.name && !p.info.name) p.info.name = p.name;
+    if (p.hospital && !p.info.hospital) p.info.hospital = p.hospital;
+    if (p.device && !p.info.device) p.info.device = p.device;
     (p.tasks || []).forEach(function walk(task) {
       if (!task.children) task.children = [];
       if (!task.costFiles) task.costFiles = [];
@@ -499,33 +557,63 @@ function compactData(data) {
 }
 
 let saveTimer = null;
+let toastTimer = null;
+
+function showToast(msg, isError) {
+  let t = document.getElementById("save-toast");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "save-toast";
+    t.className = "save-toast";
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.classList.toggle("error", !!isError);
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+function notifySaved() {
+  showToast(tr("savedOk"));
+}
+
 function pushToDrive() {
   state.driveSaving = true;
-  renderDriveStatus();
   return Drive.saveData(compactData(state.data))
     .then(() => {
       state.driveSaving = false;
       state.driveError = "";
-      renderDriveStatus();
     })
     .catch((err) => {
       state.driveSaving = false;
       state.driveError = String(err.message || err);
-      renderDriveStatus();
       throw err;
     });
 }
 
-function save(data, immediate) {
+function save(data, immediate, silent) {
   state.data = data;
   localStorage.setItem(KEY, JSON.stringify(compactData(data)));
-  if (!state.driveReady) return Promise.resolve();
+  if (!state.driveReady) {
+    if (!silent) notifySaved();
+    return Promise.resolve();
+  }
   clearTimeout(saveTimer);
   saveTimer = null;
-  if (immediate) return pushToDrive();
+  const run = () =>
+    pushToDrive()
+      .then(() => {
+        if (!silent) notifySaved();
+      })
+      .catch((err) => {
+        showToast(tr("googleError"), true);
+        throw err;
+      });
+  if (immediate) return run();
   return new Promise((resolve, reject) => {
     saveTimer = setTimeout(() => {
-      pushToDrive().then(resolve, reject);
+      run().then(resolve, reject);
     }, 600);
   });
 }
@@ -552,15 +640,7 @@ function findLoginUser(username, password) {
   return byName.length === 1 ? byName[0] : null;
 }
 
-function renderDriveStatus() {
-  const elStatus = document.querySelector("[data-drive-status]");
-  if (!elStatus) return;
-  elStatus.textContent = state.driveError
-    ? tr("googleError")
-    : state.driveSaving
-      ? tr("googleSaving")
-      : tr("googleSaved");
-}
+function renderDriveStatus() {}
 
 const state = {
   data: { users: [], projects: [] },
@@ -746,7 +826,7 @@ async function ensureDrive() {
   state.data = migrate(remote);
   state.driveReady = true;
   state.driveStatus = "ready";
-  save(state.data);
+  save(state.data, false, true);
 }
 
 async function boot() {
@@ -839,7 +919,6 @@ function shellView(user) {
         <div>
           <strong>${tr("app")}</strong>
           <div class="muted">${tr("welcome")} ${esc(user.name)} · ${esc(roleLabel(user))}</div>
-          <div class="muted" data-drive-status>${state.driveSaving ? tr("googleSaving") : tr("googleSaved")}</div>
         </div>
       </div>
       <nav class="nav">
@@ -950,6 +1029,7 @@ function copyProject(project) {
     name: `${project.name} (${tr("copied")})`,
     hospital: project.hospital,
     device: project.device,
+    info: { ...(project.info || {}), name: `${project.name} (${tr("copied")})` },
     files: cloneFiles(project.files),
     tasks: (project.tasks || []).map(cloneTask)
   };
@@ -980,12 +1060,11 @@ function projectView() {
     <div class="row" style="justify-content:space-between">
       <div>
         <h2>${esc(project.name)}</h2>
-        <div class="muted">${esc(project.hospital)} · ${esc(deviceLabel(project.device))}</div>
       </div>
       <div class="row no-print">
+        <button class="btn secondary" data-info>${tr("projectInfo")}</button>
         <button class="btn secondary" data-rep>${tr("projectReport")}</button>
         ${isPm() ? `<button class="btn secondary" data-copy>${tr("copyProject")}</button>
-        <button class="btn secondary" data-editp>${tr("editProject")}</button>
         <button class="btn danger" data-delp>${tr("delete")}</button>` : ""}
       </div>
     </div>
@@ -1038,8 +1117,7 @@ function projectView() {
   });
   const addt = box.querySelector("[data-addt]");
   if (addt) addt.onclick = () => openTaskForm(project, null, null);
-  const editp = box.querySelector("[data-editp]");
-  if (editp) editp.onclick = () => openProjectForm(project);
+  box.querySelector("[data-info]").onclick = () => openProjectForm(project);
   const copy = box.querySelector("[data-copy]");
   if (copy) copy.onclick = () => copyProject(project);
   box.querySelector("[data-rep]").onclick = () => {
@@ -1373,35 +1451,88 @@ function deviceOptions(selected) {
     .join("");
 }
 
+function fieldInputName(field) {
+  if (field.id === "name") return "name";
+  if (field.id === "device") return "device";
+  if (field.id === "hospital") return "hospital";
+  return "info_" + field.id;
+}
+
+function infoFieldControl(field, project, lockedDevice) {
+  const val = projectInfoValue(project, field);
+  const name = fieldInputName(field);
+  const ro = !isPm() ? "disabled" : "";
+  if (field.type === "device") {
+    if (lockedDevice) {
+      return `<p>${esc(fieldLabel(field))}: <b>${esc(deviceLabel(project.device || val))}</b></p>
+        <input type="hidden" name="${esc(name)}" value="${esc(project.device || val)}">`;
+    }
+    return `<label>${esc(fieldLabel(field))}<select name="${esc(name)}" ${ro}>${deviceOptions(val)}</select></label>`;
+  }
+  if (field.type === "long") {
+    return `<label>${esc(fieldLabel(field))}<textarea name="${esc(name)}" ${ro}>${esc(val)}</textarea></label>`;
+  }
+  const req = field.core || field.id === "name" ? "required" : "";
+  return `<label>${esc(fieldLabel(field))}<input name="${esc(name)}" value="${esc(val)}" ${req} ${ro}></label>`;
+}
+
+function applyProjectInfo(project, fd) {
+  const info = { ...(project.info || {}) };
+  const locked = isPm() && currentUser().deviceScope && currentUser().deviceScope !== "all";
+  (state.data.infoFields || []).forEach((f) => {
+    const key = fieldInputName(f);
+    let val = String(fd.get(key) || "").trim();
+    if ((f.type === "device" || f.id === "device") && locked) val = project.device || val;
+    info[f.id] = val;
+    if (f.id === "name") project.name = val;
+    if (f.id === "hospital") project.hospital = val;
+    if (f.type === "device" || f.id === "device") project.device = val;
+  });
+  project.info = info;
+  if (!project.name) project.name = info.name || "";
+  if (!project.device) project.device = info.device || ((state.data.devices || [])[0] || {}).id || "";
+}
+
 function openProjectForm(project) {
   const u = currentUser();
   const locked = isPm() && u.deviceScope && u.deviceScope !== "all";
-  const p = project || { name: "", hospital: "", device: locked ? u.deviceScope : ((state.data.devices || [])[0] || {}).id || "mri" };
+  const p = project || {
+    name: "",
+    hospital: "",
+    device: locked ? u.deviceScope : ((state.data.devices || [])[0] || {}).id || "",
+    info: {}
+  };
+  if (!project && locked) p.info = { device: u.deviceScope };
+  const fields = (state.data.infoFields || []).map((f) => infoFieldControl(f, p, locked)).join("");
+  const extra = isCompanyPm()
+    ? `<div class="row" style="margin-top:8px"><button class="btn secondary" type="button" data-customfields>${tr("customizeFields")}</button></div>`
+    : "";
   showForm(`
-    <h3>${project ? tr("editProject") : tr("addProject")}</h3>
-    <label>${tr("projectName")}<input name="name" value="${esc(p.name)}" required></label>
-    <label>${tr("hospital")}<input name="hospital" value="${esc(p.hospital)}" required></label>
-    ${locked
-      ? `<p>${tr("device")}: <b>${esc(deviceLabel(p.device))}</b></p><input type="hidden" name="device" value="${esc(p.device)}">`
-      : `<label>${tr("device")}<select name="device">${deviceOptions(p.device)}</select></label>`}
+    <h3>${project ? tr("projectInfo") : tr("addProject")}</h3>
+    ${fields}
+    ${extra}
   `, (fd) => {
-    const device = String(fd.get("device") || p.device);
-    if (project) {
-      project.name = fd.get("name");
-      project.hospital = fd.get("hospital");
-      project.device = device;
-    } else {
-      state.data.projects.push({
-        id: uid(),
-        name: fd.get("name"),
-        hospital: fd.get("hospital"),
-        device: device,
-        files: [],
-        tasks: []
-      });
+    if (!isPm()) return;
+    if (project) applyProjectInfo(project, fd);
+    else {
+      const created = { id: uid(), files: [], tasks: [], info: {} };
+      applyProjectInfo(created, fd);
+      state.data.projects.push(created);
     }
-    save(state.data);
+    return save(state.data, true);
   });
+  const fieldsBtn = document.querySelector("[data-customfields]");
+  if (fieldsBtn) {
+    fieldsBtn.onclick = (e) => {
+      e.preventDefault();
+      state._afterModal = () => openInfoFieldsManager(project);
+      state.modal = null;
+      render();
+      const next = state._afterModal;
+      state._afterModal = null;
+      if (next) next();
+    };
+  }
 }
 
 function openTaskForm(project, taskItem, parent) {
@@ -1508,7 +1639,8 @@ function showForm(inner, onSave) {
   modal.querySelector("form").onsubmit = (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    if (e.target.querySelector('[name="name"]') && !String(fd.get("name") || "").trim()) {
+    const nameInput = e.target.querySelector('[name="name"]');
+    if (nameInput && !nameInput.disabled && !String(fd.get("name") || "").trim()) {
       modal.querySelector(".error").textContent = tr("required");
       return;
     }
@@ -1518,6 +1650,9 @@ function showForm(inner, onSave) {
         if (ok === false) return;
         state.modal = null;
         render();
+        const next = state._afterModal;
+        state._afterModal = null;
+        if (typeof next === "function") next();
       })
       .catch(() => {
         modal.querySelector(".error").textContent = tr("googleError");
@@ -1700,6 +1835,17 @@ function usersView() {
         <tbody data-devs></tbody>
       </table>
     </div>
+    <div class="row" style="justify-content:space-between; margin-top:22px">
+      <h2>${tr("infoFields")}</h2>
+      <button class="btn secondary" data-addfield>${tr("addField")}</button>
+    </div>
+    <p class="hint">${tr("infoFieldsHint")}</p>
+    <div class="card" style="padding:8px 16px; margin-top:12px; overflow:auto">
+      <table>
+        <thead><tr><th>${tr("deviceNameAr")}</th><th>${tr("deviceNameEn")}</th><th>${tr("fieldType")}</th><th></th></tr></thead>
+        <tbody data-fields></tbody>
+      </table>
+    </div>
   </div>`);
   const tbody = box.querySelector("tbody");
   state.data.users.forEach((u) => {
@@ -1724,18 +1870,48 @@ function usersView() {
   (state.data.devices || []).forEach((d) => {
     const row = el(`<tr>
       <td>${esc(d.ar)}</td><td>${esc(d.en)}</td>
-      <td>${["mri", "ct", "cath", "other"].includes(d.id) ? "" : `<button class="btn small danger" data-deldev>${tr("delete")}</button>`}</td>
+      <td class="row">
+        <button class="btn small" data-eddev>${tr("edit")}</button>
+        <button class="btn small danger" data-deldev>${tr("delete")}</button>
+      </td>
     </tr>`);
-    const deld = row.querySelector("[data-deldev]");
-    if (deld) deld.onclick = () => {
+    row.querySelector("[data-eddev]").onclick = () => openDeviceForm(d);
+    row.querySelector("[data-deldev]").onclick = () => {
+      if ((state.data.devices || []).length < 2) {
+        alert(tr("lastDevice"));
+        return;
+      }
       state.data.devices = state.data.devices.filter((x) => x.id !== d.id);
+      (state.data.users || []).forEach((u) => {
+        if (u.deviceScope === d.id) u.deviceScope = "all";
+      });
       save(state.data);
       render();
     };
     devs.append(row);
   });
+  const fieldsBody = box.querySelector("[data-fields]");
+  (state.data.infoFields || []).forEach((f) => {
+    const typeKey = f.type === "device" ? "fieldDevice" : f.type === "long" ? "fieldLong" : "fieldText";
+    const row = el(`<tr>
+      <td>${esc(f.ar)}</td><td>${esc(f.en)}</td><td>${esc(tr(typeKey))}</td>
+      <td class="row">
+        <button class="btn small" data-edf>${tr("edit")}</button>
+        ${f.core ? "" : `<button class="btn small danger" data-delf>${tr("delete")}</button>`}
+      </td>
+    </tr>`);
+    row.querySelector("[data-edf]").onclick = () => openInfoFieldForm(f);
+    const delf = row.querySelector("[data-delf]");
+    if (delf) delf.onclick = () => {
+      state.data.infoFields = state.data.infoFields.filter((x) => x.id !== f.id);
+      save(state.data);
+      render();
+    };
+    fieldsBody.append(row);
+  });
   box.querySelector("[data-add]").onclick = () => openUserForm(null);
   box.querySelector("[data-adddev]").onclick = () => openDeviceForm();
+  box.querySelector("[data-addfield]").onclick = () => openInfoFieldForm();
   return box;
 }
 
@@ -1803,22 +1979,121 @@ function openUserForm(user) {
   document.querySelector('select[name="deviceScope"]').value = u.deviceScope || "all";
 }
 
-function openDeviceForm() {
+function openDeviceForm(device) {
+  const d = device || { ar: "", en: "" };
   showForm(`
-    <h3>${tr("addDevice")}</h3>
-    <label>${tr("deviceNameAr")}<input name="ar" required></label>
-    <label>${tr("deviceNameEn")}<input name="en" required></label>
+    <h3>${device ? tr("editDevice") : tr("addDevice")}</h3>
+    <label>${tr("deviceNameAr")}<input name="ar" value="${esc(d.ar)}" required></label>
+    <label>${tr("deviceNameEn")}<input name="en" value="${esc(d.en)}" required></label>
   `, (fd) => {
     const ar = String(fd.get("ar") || "").trim();
     const en = String(fd.get("en") || "").trim();
     if (!ar || !en) return false;
-    const id = en.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || uid();
-    if ((state.data.devices || []).some((d) => d.id === id)) {
-      state.data.devices.push({ id: id + "-" + uid(), ar, en });
+    if (device) {
+      device.ar = ar;
+      device.en = en;
     } else {
-      state.data.devices.push({ id, ar, en });
+      const id = en.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || uid();
+      const finalId = (state.data.devices || []).some((x) => x.id === id) ? id + "-" + uid() : id;
+      state.data.devices = state.data.devices || [];
+      state.data.devices.push({ id: finalId, ar, en });
     }
-    save(state.data);
+    return save(state.data, true);
+  });
+}
+
+function openInfoFieldForm(field, project) {
+  const f = field || { ar: "", en: "", type: "text" };
+  showForm(`
+    <h3>${field ? tr("editField") : tr("addField")}</h3>
+    <label>${tr("deviceNameAr")}<input name="ar" value="${esc(f.ar)}" required></label>
+    <label>${tr("deviceNameEn")}<input name="en" value="${esc(f.en)}" required></label>
+    <label>${tr("fieldType")}<select name="type" ${field && field.core ? "disabled" : ""}>
+      <option value="text">${tr("fieldText")}</option>
+      <option value="long">${tr("fieldLong")}</option>
+      <option value="device">${tr("fieldDevice")}</option>
+    </select></label>
+  `, (fd) => {
+    const ar = String(fd.get("ar") || "").trim();
+    const en = String(fd.get("en") || "").trim();
+    if (!ar || !en) return false;
+    const type = field && field.core ? field.type : String(fd.get("type") || "text");
+    if (field) {
+      field.ar = ar;
+      field.en = en;
+      if (!field.core) field.type = type;
+    } else {
+      const id = en.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || uid();
+      const finalId = (state.data.infoFields || []).some((x) => x.id === id) ? id + "-" + uid() : id;
+      state.data.infoFields = state.data.infoFields || [];
+      state.data.infoFields.push({ id: finalId, ar, en, type });
+    }
+    return save(state.data, true).then(() => {
+      if (project !== undefined) state._afterModal = () => openProjectForm(project);
+    });
+  });
+  const typeSel = document.querySelector('select[name="type"]');
+  if (typeSel) typeSel.value = f.type === "device" || f.type === "long" ? f.type : "text";
+}
+
+function openInfoFieldsManager(project) {
+  const rows = (state.data.infoFields || [])
+    .map((f) => {
+      const typeKey = f.type === "device" ? "fieldDevice" : f.type === "long" ? "fieldLong" : "fieldText";
+      return `<tr>
+        <td>${esc(f.ar)}</td><td>${esc(f.en)}</td><td>${esc(tr(typeKey))}</td>
+        <td class="row">
+          <button class="btn small" type="button" data-edf="${esc(f.id)}">${tr("edit")}</button>
+          ${f.core ? "" : `<button class="btn small danger" type="button" data-delf="${esc(f.id)}">${tr("delete")}</button>`}
+        </td>
+      </tr>`;
+    })
+    .join("");
+  showForm(`
+    <h3>${tr("infoFields")}</h3>
+    <p class="hint">${tr("infoFieldsHint")}</p>
+    <div class="card" style="padding:8px 12px; overflow:auto">
+      <table>
+        <thead><tr><th>${tr("deviceNameAr")}</th><th>${tr("deviceNameEn")}</th><th>${tr("fieldType")}</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn secondary" type="button" data-addfield>${tr("addField")}</button>
+    </div>
+  `, () => {
+    if (project) state._afterModal = () => openProjectForm(project);
+  });
+  const modal = state.modal;
+  const add = modal.querySelector("[data-addfield]");
+  if (add) add.onclick = () => {
+    state.modal = null;
+    render();
+    openInfoFieldForm(null, project);
+  };
+  modal.querySelectorAll("[data-edf]").forEach((btn) => {
+    btn.onclick = () => {
+      const f = (state.data.infoFields || []).find((x) => x.id === btn.getAttribute("data-edf"));
+      state.modal = null;
+      render();
+      openInfoFieldForm(f, project);
+    };
+  });
+  modal.querySelectorAll("[data-delf]").forEach((btn) => {
+    btn.onclick = () => {
+      const id = btn.getAttribute("data-delf");
+      const f = (state.data.infoFields || []).find((x) => x.id === id);
+      if (!f || f.core) {
+        alert(tr("coreField"));
+        return;
+      }
+      state.data.infoFields = state.data.infoFields.filter((x) => x.id !== id);
+      save(state.data, true).then(() => {
+        state.modal = null;
+        render();
+        openInfoFieldsManager(project);
+      });
+    };
   });
 }
 
