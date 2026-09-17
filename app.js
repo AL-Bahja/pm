@@ -87,6 +87,8 @@ const I18N = {
     email: "البريد الإلكتروني",
     displayName: "الاسم الظاهر",
     newPassword: "كلمة مرور جديدة",
+    userLoginHint: "الدخول يكون باسم المستخدم وكلمة المرور المحفوظة هنا (يمكن أيضاً الاسم الظاهر).",
+    usernameTaken: "اسم المستخدم موجود مسبقاً.",
     onlyPm: "المراقبة فقط. التعديل متاح لمدير المشاريع.",
     badLogin: "اسم المستخدم أو كلمة المرور غير صحيحة.",
     required: "أكمل الحقول المطلوبة.",
@@ -219,6 +221,8 @@ const I18N = {
     email: "Email",
     displayName: "Display name",
     newPassword: "New password",
+    userLoginHint: "They sign in with this username and password (display name also works).",
+    usernameTaken: "This username already exists.",
     onlyPm: "Read only. Only the project manager can edit.",
     badLogin: "Wrong username or password.",
     required: "Fill the required fields.",
@@ -495,26 +499,57 @@ function compactData(data) {
 }
 
 let saveTimer = null;
-function save(data) {
-  state.data = data;
-  localStorage.setItem(KEY, JSON.stringify(compactData(data)));
-  if (!state.driveReady) return;
+function pushToDrive() {
   state.driveSaving = true;
   renderDriveStatus();
+  return Drive.saveData(compactData(state.data))
+    .then(() => {
+      state.driveSaving = false;
+      state.driveError = "";
+      renderDriveStatus();
+    })
+    .catch((err) => {
+      state.driveSaving = false;
+      state.driveError = String(err.message || err);
+      renderDriveStatus();
+      throw err;
+    });
+}
+
+function save(data, immediate) {
+  state.data = data;
+  localStorage.setItem(KEY, JSON.stringify(compactData(data)));
+  if (!state.driveReady) return Promise.resolve();
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    Drive.saveData(compactData(state.data))
-      .then(() => {
-        state.driveSaving = false;
-        state.driveError = "";
-        renderDriveStatus();
-      })
-      .catch((err) => {
-        state.driveSaving = false;
-        state.driveError = String(err.message || err);
-        renderDriveStatus();
-      });
-  }, 600);
+  saveTimer = null;
+  if (immediate) return pushToDrive();
+  return new Promise((resolve, reject) => {
+    saveTimer = setTimeout(() => {
+      pushToDrive().then(resolve, reject);
+    }, 600);
+  });
+}
+
+function flushSave() {
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  if (!state.driveReady) return Promise.resolve();
+  return Drive.saveQueue.catch(() => {}).then(() => pushToDrive());
+}
+
+function sameLoginName(a, b) {
+  return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+}
+
+function findLoginUser(username, password) {
+  const name = String(username || "").trim();
+  const pass = String(password || "").trim();
+  const users = state.data.users || [];
+  const passOk = (u) => String(u.password || "").trim() === pass;
+  const byUser = users.find((u) => sameLoginName(u.username, name) && passOk(u));
+  if (byUser) return byUser;
+  const byName = users.filter((u) => sameLoginName(u.name, name) && passOk(u));
+  return byName.length === 1 ? byName[0] : null;
 }
 
 function renderDriveStatus() {
@@ -755,14 +790,34 @@ function loginView() {
     btn.disabled = true;
     try {
       if (!state.driveReady) await ensureDrive();
+      else await flushSave();
     } catch (ex) {
       err.textContent = tr("googleError");
       btn.disabled = false;
       return;
     }
-    const user = state.data.users.find(
-      (u) => u.username === String(fd.get("username")).trim() && u.password === String(fd.get("password"))
-    );
+    const username = String(fd.get("username") || "");
+    const password = String(fd.get("password") || "");
+    let user = findLoginUser(username, password);
+    if (!user) {
+      try {
+        const remote = await Drive.loadData();
+        if (remote && Array.isArray(remote.users)) state.data = migrate(remote);
+        user = findLoginUser(username, password);
+      } catch (ex) {
+        /* keep current data */
+      }
+    }
+    if (!user) {
+      const local = loadLocalFallback();
+      const have = state.data.users || [];
+      (local.users || []).forEach((lu) => {
+        if (!have.some((u) => sameLoginName(u.username, lu.username))) have.push(lu);
+      });
+      state.data.users = have;
+      user = findLoginUser(username, password);
+      if (user) save(state.data, true).catch(() => {});
+    }
     if (!user) {
       err.textContent = tr("badLogin");
       btn.disabled = false;
@@ -810,6 +865,7 @@ function shellView(user) {
   });
   wrap.querySelector("[data-lang]").onclick = setLang;
   wrap.querySelector("[data-out]").onclick = () => {
+    flushSave().catch(() => {});
     state.session = null;
     persistSession();
     render();
@@ -1452,14 +1508,21 @@ function showForm(inner, onSave) {
   modal.querySelector("form").onsubmit = (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    if (!String(fd.get("name") || "").trim()) {
+    if (e.target.querySelector('[name="name"]') && !String(fd.get("name") || "").trim()) {
       modal.querySelector(".error").textContent = tr("required");
       return;
     }
-    const ok = onSave(fd, modal);
-    if (ok === false) return;
-    state.modal = null;
-    render();
+    const btn = modal.querySelector('[type="submit"]');
+    Promise.resolve(onSave(fd, modal))
+      .then((ok) => {
+        if (ok === false) return;
+        state.modal = null;
+        render();
+      })
+      .catch(() => {
+        modal.querySelector(".error").textContent = tr("googleError");
+        if (btn) btn.disabled = false;
+      });
   };
   state.modal = modal;
   render();
@@ -1683,10 +1746,11 @@ function openUserForm(user) {
     .join("");
   showForm(`
     <h3>${user ? tr("edit") : tr("addUser")}</h3>
+    <p class="hint">${tr("userLoginHint")}</p>
     <div class="grid-2">
-      <label>${tr("username")}<input name="username" value="${esc(u.username)}" required></label>
-      <label>${tr("displayName")}<input name="name" value="${esc(u.name)}" required></label>
-      <label>${tr("email")}<input name="email" type="email" value="${esc(u.email)}"></label>
+      <label>${tr("username")}<input name="username" value="${esc(u.username)}" required autocomplete="off"></label>
+      <label>${tr("displayName")}<input name="name" value="${esc(u.name)}" required autocomplete="off"></label>
+      <label>${tr("email")}<input name="email" type="email" value="${esc(u.email || "")}" autocomplete="off"></label>
       <label>${tr("role")}<select name="role">
         <option value="pm">${tr("pm")}</option>
         <option value="other">${tr("otherRole")}</option>
@@ -1694,21 +1758,31 @@ function openUserForm(user) {
     </div>
     <label>${tr("deviceScope")}<select name="deviceScope">${scopeOpts}</select></label>
     <label>${tr("roleTitle")}<input name="roleTitle" value="${esc(u.roleTitle || "")}" placeholder="${esc(tr("roleTitleHint"))}"></label>
-    <label>${tr("newPassword")}<input name="password" type="password" placeholder="${user ? "••••••" : ""}"></label>
+    <label>${tr("newPassword")}<input name="password" type="password" autocomplete="new-password"${user ? "" : " minlength=\"8\" required"} placeholder="${user ? "••••••" : ""}"></label>
   `, (fd, modal) => {
     const payload = {
-      username: String(fd.get("username")).trim(),
-      name: fd.get("name"),
+      username: String(fd.get("username") || "").trim(),
+      name: String(fd.get("name") || "").trim(),
       email: fd.get("email"),
       role: fd.get("role"),
       deviceScope: String(fd.get("deviceScope") || "all"),
       roleTitle: fd.get("role") === "pm" ? "" : String(fd.get("roleTitle") || "").trim()
     };
-    if (payload.role === "other" && !payload.roleTitle) {
+    if (!payload.username || !payload.name) {
       modal.querySelector(".error").textContent = tr("required");
       return false;
     }
-    const pass = String(fd.get("password") || "");
+    const taken = (state.data.users || []).some(
+      (x) => (!user || x.id !== user.id) && sameLoginName(x.username, payload.username)
+    );
+    if (taken) {
+      modal.querySelector(".error").textContent = tr("usernameTaken");
+      return false;
+    }
+    if (payload.role === "other" && !payload.roleTitle) {
+      payload.roleTitle = tr("otherRole");
+    }
+    const pass = String(fd.get("password") || "").trim();
     if (pass && isWeakPassword(pass)) {
       modal.querySelector(".error").textContent = tr("weakPassword");
       return false;
@@ -1723,7 +1797,7 @@ function openUserForm(user) {
       }
       state.data.users.push({ id: uid(), password: pass, ...payload });
     }
-    save(state.data);
+    return save(state.data, true);
   });
   document.querySelector('select[name="role"]').value = u.role === "pm" ? "pm" : "other";
   document.querySelector('select[name="deviceScope"]').value = u.deviceScope || "all";
