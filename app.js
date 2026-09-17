@@ -116,7 +116,8 @@ const I18N = {
     googleError: "تعذر تحميل بيانات الشركة. أكمل إعداد التخزين مرة واحدة من حساب درايف الشركة.",
     googleHint: "من أي حاسبة: اربط جوجل درايف بحساب الشركة picassomega86@gmail.com (هذا التخزين المشترك). بعد ذلك يظهر دخول النظام: مدير المشاريع أو مستخدم آخر.",
     googleWrongAccount: "يفضّل استخدام حساب درايف الشركة:",
-    driveFolder: "مجلد التطبيق"
+    driveFolder: "مجلد التطبيق",
+    ganttSwipe: "على الهاتف: اسحب الجدول يميناً ويساراً لمشاهدة الأيام، ولأعلى ولأسفل للمهام."
   },
   en: {
     app: "Al-Bahja Company Project Management",
@@ -235,7 +236,8 @@ const I18N = {
     googleError: "Could not load company data. Complete storage setup once with the company Drive account.",
     googleHint: "On any PC, connect Google Drive with the company account picassomega86@gmail.com (shared storage). Then sign in as project manager or another user.",
     googleWrongAccount: "Prefer the company Drive account:",
-    driveFolder: "App folder"
+    driveFolder: "App folder",
+    ganttSwipe: "On phone: swipe the chart left and right for dates, up and down for tasks."
   }
 };
 
@@ -874,6 +876,7 @@ function projectView() {
       <div class="card kpi"><span class="muted">${tr("actualDays")}</span><b>${s.actualDays} ${tr("days")}</b></div>
     </div>
     <h3>${tr("gantt")}</h3>
+    <p class="hint gantt-hint no-print">${tr("ganttSwipe")}</p>
     <div class="legend"><span><i class="swatch planned"></i>${tr("planned")}</span><span><i class="swatch actual"></i>${tr("actual")}</span></div>
     <div class="card gantt-wrap">${ganttHtml(project)}</div>
     <div class="card" style="padding:16px; margin-top:16px">
@@ -1150,7 +1153,7 @@ function ganttHtml(project) {
   const min = startOfMonth(new Date(Math.min(...dates)));
   const max = endOfMonth(new Date(Math.max(...dates)));
   const days = enumerateDays(min, max);
-  const dayW = 16;
+  const dayW = window.matchMedia("(max-width: 800px)").matches ? 12 : 16;
   const scaleW = days.length * dayW;
   const years = groupDays(days, (d) => String(d.getFullYear()));
   const months = groupDays(days, (d) => `${d.getFullYear()}-${d.getMonth()}`);
@@ -1180,7 +1183,17 @@ function ganttHtml(project) {
     .join("");
 
   const vis = visibleTaskRows(project);
-  const lockRows = vis
+  const barHtml = (start, end, cls) => {
+    const a = parseDay(start);
+    if (!a) return "";
+    const b = parseDay(end) || a;
+    const i1 = Math.round((a - min) / 86400000);
+    const i2 = Math.round((b - min) / 86400000);
+    const left = Math.max(0, i1) * dayW;
+    const width = Math.max(1, i2 - i1 + 1) * dayW;
+    return `<div class="bar ${cls}" style="left:${left}px;width:${width}px" title="${fmtDate(start)} → ${fmtDate(end)}"></div>`;
+  };
+  const rows = vis
     .map(({ task, depth, last }) => {
       const kids = hasChildren(task);
       const expanded = isExpanded(task.id);
@@ -1190,71 +1203,41 @@ function ganttHtml(project) {
           ? `<button class="twist ${expanded ? "open" : ""}" type="button" data-twist="${task.id}" title="${expanded ? tr("collapse") : tr("expand")}">${expanded ? "▾" : "▸"}</button>`
           : `<span class="twist-spacer"></span>`;
       const count = kids && !expanded ? `<span class="sub-count">${task.children.length}</span>` : "";
-      return `<div class="gantt-lock-row ${depth ? "sub" : ""}">
-        <div class="gantt-name">${twist}<span class="gantt-name-text">${esc(task.name)}</span>${count}</div>
-        <div class="gantt-col gantt-dates-p">${dateRange(task.plannedStart, task.plannedEnd)}</div>
-        <div class="gantt-col gantt-dates-a">${dateRange(task.actualStart, task.actualEnd)}</div>
-      </div>`;
-    })
-    .join("");
-  const flowRows = vis
-    .map(({ task }) => {
-      const bar = (start, end, cls) => {
-        const a = parseDay(start);
-        if (!a) return "";
-        const b = parseDay(end) || a;
-        const i1 = Math.round((a - min) / 86400000);
-        const i2 = Math.round((b - min) / 86400000);
-        const left = Math.max(0, i1) * dayW;
-        const width = Math.max(1, i2 - i1 + 1) * dayW;
-        return `<div class="bar ${cls}" style="left:${left}px;width:${width}px" title="${fmtDate(start)} → ${fmtDate(end)}"></div>`;
-      };
-      return `<div class="gantt-flow-row">
+      return `<div class="gantt-row ${depth ? "sub" : ""}">
+        <div class="gantt-sticky-name">
+          <div class="gantt-name">${twist}<span class="gantt-name-text">${esc(task.name)}</span>${count}</div>
+          <div class="gantt-col gantt-dates-p">${dateRange(task.plannedStart, task.plannedEnd)}</div>
+          <div class="gantt-col gantt-dates-a">${dateRange(task.actualStart, task.actualEnd)}</div>
+        </div>
         <div class="gantt-track" style="width:${scaleW}px">
           ${monthLines}
-          ${bar(task.plannedStart, task.plannedEnd, "planned")}
-          ${bar(task.actualStart, task.actualEnd, "actual")}
+          ${barHtml(task.plannedStart, task.plannedEnd, "planned")}
+          ${barHtml(task.actualStart, task.actualEnd, "actual")}
         </div>
       </div>`;
     })
     .join("");
 
   return `<div class="gantt" style="--day-w:${dayW}px">
-    <div class="gantt-lock" data-gantt-lock>
-      <div class="gantt-lock-head">
-        <div class="gantt-name">${tr("taskName")}</div>
-        <div class="gantt-col">${tr("planned")}</div>
-        <div class="gantt-col">${tr("actual")}</div>
-      </div>
-      <div class="gantt-lock-body">${lockRows}</div>
-    </div>
-    <div class="gantt-flow" data-gantt-flow>
-      <div class="gantt-flow-head">
+    <div class="gantt-scroll">
+      <div class="gantt-head">
+        <div class="gantt-sticky-name">
+          <div class="gantt-name">${tr("taskName")}</div>
+          <div class="gantt-col gantt-dates-p">${tr("planned")}</div>
+          <div class="gantt-col gantt-dates-a">${tr("actual")}</div>
+        </div>
         <div class="gantt-scale" style="width:${scaleW}px">
           <div class="gantt-years">${yearBand}</div>
           <div class="gantt-months">${monthBand}</div>
           <div class="gantt-days">${dayBand}</div>
         </div>
       </div>
-      <div class="gantt-flow-body">${flowRows}</div>
+      ${rows}
     </div>
   </div>`;
 }
 
-function bindGanttScroll(root) {
-  const lock = root.querySelector("[data-gantt-lock]");
-  const flow = root.querySelector("[data-gantt-flow]");
-  if (!lock || !flow) return;
-  let syncing = false;
-  const sync = (from, to) => {
-    if (syncing) return;
-    syncing = true;
-    to.scrollTop = from.scrollTop;
-    syncing = false;
-  };
-  flow.addEventListener("scroll", () => sync(flow, lock));
-  lock.addEventListener("scroll", () => sync(lock, flow));
-}
+function bindGanttScroll() {}
 
 function moveInList(list, index, dir) {
   const next = index + dir;

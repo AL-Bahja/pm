@@ -128,30 +128,34 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   display: flex;
   flex-direction: column;
 }
+.gantt-hint { display: none; margin: 0 0 8px; }
 .gantt {
   --name-w: 220px;
   --date-w: 132px;
+  --lock-w: calc(var(--name-w) + var(--date-w) + var(--date-w));
   --row-h: 22px;
   --head-h: 48px;
   flex: 1;
   min-height: 0;
-  display: flex;
-  direction: ltr;
   overflow: hidden;
+  direction: ltr;
 }
-.gantt-lock {
-  flex: 0 0 calc(var(--name-w) + var(--date-w) + var(--date-w));
-  width: calc(var(--name-w) + var(--date-w) + var(--date-w));
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: none;
-  background: #fff;
-  border-right: 1px solid var(--line);
-  z-index: 4;
+.gantt-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
 }
-.gantt-lock::-webkit-scrollbar { width: 0; height: 0; }
-.gantt-flow { flex: 1; min-width: 0; overflow: auto; }
-.gantt-lock-head, .gantt-flow-head {
+.gantt-head,
+.gantt-row {
+  display: flex;
+  flex-wrap: nowrap;
+  width: max-content;
+  min-width: 100%;
+}
+.gantt-head {
   position: sticky;
   top: 0;
   z-index: 6;
@@ -159,12 +163,23 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   background: #f4f8fa;
   box-shadow: 0 1px 0 var(--line);
 }
-.gantt-lock-head, .gantt-lock-row {
+.gantt-sticky-name {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  flex: 0 0 var(--lock-w);
+  width: var(--lock-w);
   display: grid;
   grid-template-columns: var(--name-w) var(--date-w) var(--date-w);
-  direction: ltr;
+  background: #fff;
+  box-shadow: 4px 0 8px rgba(18, 32, 43, 0.06);
 }
-.gantt-lock-row, .gantt-flow-row { height: var(--row-h); border-bottom: 1px solid #edf2f5; }
+.gantt-head .gantt-sticky-name {
+  z-index: 7;
+  background: #f4f8fa;
+  height: var(--head-h);
+}
+.gantt-row { height: var(--row-h); border-bottom: 1px solid #edf2f5; }
 .gantt-name, .gantt-col {
   display: flex;
   align-items: center;
@@ -178,8 +193,8 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   background: #fff;
   font-size: 12px;
 }
-.gantt-lock-head .gantt-name,
-.gantt-lock-head .gantt-col {
+.gantt-head .gantt-name,
+.gantt-head .gantt-col {
   height: var(--head-h);
   font-size: 11px;
   font-weight: 700;
@@ -188,7 +203,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   padding-bottom: 6px;
 }
 .gantt-name { font-weight: 600; }
-.gantt-lock-row.sub .gantt-name { font-weight: 500; color: var(--muted); font-size: 11px; }
+.gantt-row.sub .gantt-name { font-weight: 500; color: var(--muted); font-size: 11px; }
 .gantt-col { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .gantt-name-text {
   overflow: hidden;
@@ -233,6 +248,28 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 }
 .bar.planned { background: var(--planned); top: 3px; }
 .bar.actual { background: var(--actual); top: 12px; }
+
+@media (max-width: 800px) {
+  .page { padding: 12px; }
+  .topbar { padding: 10px 12px; align-items: flex-start; }
+  .gantt-hint { display: block; }
+  .gantt-wrap { height: min(78vh, 640px); min-height: 280px; }
+  .gantt {
+    --name-w: 128px;
+    --date-w: 0px;
+    --lock-w: 128px;
+    --row-h: 28px;
+    --head-h: 44px;
+  }
+  .gantt-sticky-name { grid-template-columns: var(--name-w); }
+  .gantt-dates-p, .gantt-dates-a { display: none; }
+  .gantt-days { display: none; }
+  .gantt-head { --head-h: 32px; height: 32px; }
+  .gantt-head .gantt-name, .gantt-head .gantt-col { height: 32px; padding-bottom: 4px; }
+  .bar { height: 8px; }
+  .bar.planned { top: 4px; }
+  .bar.actual { top: 16px; }
+}
 .task-name-cell { display: inline-flex; align-items: center; gap: 8px; }
 .twist {
   width: 18px; height: 18px; padding: 0;
@@ -289,6 +326,5 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   .page { padding: 0; max-width: none; }
   .card { box-shadow: none; }
   .gantt-wrap, .report-gantt { height: auto !important; max-height: none !important; overflow: visible !important; }
-  .gantt { overflow: visible !important; height: auto; display: flex; }
-  .gantt-lock, .gantt-flow { overflow: visible !important; }
+  .gantt, .gantt-scroll { overflow: visible !important; height: auto; }
 }
