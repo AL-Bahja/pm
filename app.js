@@ -51,6 +51,7 @@ const I18N = {
     notes: "ملاحظات",
     save: "حفظ",
     cancel: "إلغاء",
+    close: "إغلاق",
     delete: "حذف",
     up: "أعلى",
     down: "أسفل",
@@ -203,6 +204,7 @@ const I18N = {
     notes: "Notes",
     save: "Save",
     cancel: "Cancel",
+    close: "Close",
     delete: "Delete",
     up: "Up",
     down: "Down",
@@ -789,7 +791,7 @@ function passwordGateView(user) {
     <form class="login-card">
       <div class="brand"><div class="logo">PM</div><div><h1>${tr("changePassword")}</h1><div class="muted">${esc(user.name)}</div></div></div>
       <p class="hint">${tr("mustChangePass")}</p>
-      <label>${tr("newPassword")}<input name="password" type="password" minlength="8" required></label>
+      <label>${tr("newPassword")}<input name="password" type="text" minlength="8" required autocomplete="off"></label>
       <p class="error"></p>
       <button class="btn" type="submit">${tr("save")}</button>
     </form>
@@ -848,7 +850,7 @@ function loginView() {
       <div class="brand"><div class="logo">PM</div><div><h1>${tr("loginTitle")}</h1><div class="muted">${tr("app")}</div></div></div>
       <p class="hint">${tr("loginHint")}</p>
       <label>${tr("username")}<input name="username" autocomplete="username" required></label>
-      <label>${tr("password")}<input name="password" type="password" autocomplete="current-password" required></label>
+      <label>${tr("password")}<input name="password" type="text" autocomplete="current-password" required></label>
       <p class="error"></p>
       <div class="row">
         <button class="btn" type="submit">${tr("enter")}</button>
@@ -1567,7 +1569,7 @@ function openProjectFiles(project) {
   showForm(`
     <h3>${tr("projectFiles")}</h3>
     <div data-proj-files></div>
-  `, () => {});
+  `, () => {}, { hideSave: !isPm() });
   mountFileBox(document.querySelector("[data-proj-files]"), project.files, () => save(state.data));
 }
 
@@ -1659,13 +1661,14 @@ function openTaskForm(project, taskItem, parent) {
   });
 }
 
-function showForm(inner, onSave) {
+function showForm(inner, onSave, opts) {
+  const hideSave = !!(opts && opts.hideSave);
   const modal = el(`<div class="modal-bg"><form class="modal card">
     ${inner}
     <p class="error"></p>
     <div class="row" style="margin-top:12px">
-      <button class="btn" type="submit">${tr("save")}</button>
-      <button class="btn secondary" type="button" data-cancel>${tr("cancel")}</button>
+      ${hideSave ? "" : `<button class="btn" type="submit">${tr("save")}</button>`}
+      <button class="btn ${hideSave ? "" : "secondary"}" type="button" data-cancel>${hideSave ? tr("close") : tr("cancel")}</button>
     </div>
   </form></div>`);
   modal.querySelector("[data-cancel]").onclick = () => {
@@ -1857,7 +1860,7 @@ function usersView() {
     </div>
     <div class="card" style="padding:8px 16px; margin-top:12px; overflow:auto">
       <table>
-        <thead><tr><th>${tr("username")}</th><th>${tr("displayName")}</th><th>${tr("role")}</th><th>${tr("deviceScope")}</th><th></th></tr></thead>
+        <thead><tr><th>${tr("username")}</th><th>${tr("displayName")}</th><th>${tr("password")}</th><th>${tr("role")}</th><th>${tr("deviceScope")}</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -1875,7 +1878,7 @@ function usersView() {
   const tbody = box.querySelector("tbody");
   state.data.users.forEach((u) => {
     const row = el(`<tr>
-      <td>${esc(u.username)}</td><td>${esc(u.name)}</td><td>${esc(u.role === "pm" ? tr("pm") : (u.roleTitle || tr("otherRole")))}</td>
+      <td>${esc(u.username)}</td><td>${esc(u.name)}</td><td>${esc(u.password || "")}</td><td>${esc(u.role === "pm" ? tr("pm") : (u.roleTitle || tr("otherRole")))}</td>
       <td>${esc(!u.deviceScope || u.deviceScope === "all" ? tr("allDevices") : deviceLabel(u.deviceScope))}</td>
       <td class="row">
         <button class="btn small" data-ed>${tr("edit")}</button>
@@ -1939,7 +1942,7 @@ function openUserForm(user) {
     </div>
     <label>${tr("deviceScope")}<select name="deviceScope">${scopeOpts}</select></label>
     <label>${tr("roleTitle")}<input name="roleTitle" value="${esc(u.roleTitle || "")}" placeholder="${esc(tr("roleTitleHint"))}"></label>
-    <label>${tr("newPassword")}<input name="password" type="password" autocomplete="new-password"${user ? "" : " minlength=\"8\" required"} placeholder="${user ? "••••••" : ""}"></label>
+    <label>${tr("password")}<input name="password" type="text" value="${esc(u.password || "")}" autocomplete="off"${user ? "" : " minlength=\"8\" required"}></label>
   `, (fd, modal) => {
     const payload = {
       username: String(fd.get("username") || "").trim(),
@@ -2016,7 +2019,7 @@ function profileView() {
       <label>${tr("displayName")}<input name="name" value="${esc(u.name)}" ${isPm() ? "" : "disabled"}></label>
       <label>${tr("email")}<input name="email" type="email" value="${esc(u.email || "")}" ${isPm() ? "" : "disabled"}></label>
       ${isPm() ? `<label>${tr("username")}<input name="username" value="${esc(u.username)}"></label>` : `<p>${tr("username")}: <b>${esc(u.username)}</b></p>`}
-      <label>${tr("changePassword")}<input name="password" type="password" minlength="8"></label>
+      <label>${tr("password")}<input name="password" type="text" minlength="8" value="${esc(u.password || "")}" autocomplete="off"></label>
       ${!isPm() ? `<p class="readonly-note">${tr("onlyPm")}</p>` : ""}
       <p class="error"></p>
       <button class="btn" type="submit">${tr("save")}</button>
