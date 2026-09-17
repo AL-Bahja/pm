@@ -113,7 +113,7 @@ const I18N = {
     googleLoading: "جاري قراءة project_data.json من درايف…",
     googleSaving: "جاري الحفظ على درايف…",
     googleSaved: "محفوظ على درايف",
-    googleError: "تعذر الاتصال بجوجل درايف",
+    googleError: "تعذر تحميل بيانات الشركة. أكمل إعداد التخزين مرة واحدة من حساب درايف الشركة.",
     googleHint: "من أي حاسبة: اربط جوجل درايف بحساب الشركة picassomega86@gmail.com (هذا التخزين المشترك). بعد ذلك يظهر دخول النظام: مدير المشاريع أو مستخدم آخر.",
     googleWrongAccount: "يفضّل استخدام حساب درايف الشركة:",
     driveFolder: "مجلد التطبيق"
@@ -232,7 +232,7 @@ const I18N = {
     googleLoading: "Reading project_data.json from Drive…",
     googleSaving: "Saving to Drive…",
     googleSaved: "Saved to Drive",
-    googleError: "Could not connect to Google Drive",
+    googleError: "Could not load company data. Complete storage setup once with the company Drive account.",
     googleHint: "On any PC, connect Google Drive with the company account picassomega86@gmail.com (shared storage). Then sign in as project manager or another user.",
     googleWrongAccount: "Prefer the company Drive account:",
     driveFolder: "App folder"
@@ -629,10 +629,11 @@ function passwordGateView(user) {
   return box;
 }
 
-async function ensureDrive(silent) {
-  if (state.driveReady && Drive.token) return;
+async function ensureDrive() {
+  if (state.driveReady && (Drive.token || Drive.useBridge())) return;
+  if (!Drive.useBridge()) throw new Error("no-bridge");
   await Drive.init();
-  await Drive.signIn(!!silent);
+  await Drive.signIn();
   state.googleProfile = Drive.profile;
   let remote = await Drive.loadData();
   const empty =
@@ -643,10 +644,6 @@ async function ensureDrive(silent) {
   state.driveReady = true;
   state.driveStatus = "ready";
   save(state.data);
-}
-
-async function connectDrive() {
-  return ensureDrive(false);
 }
 
 async function boot() {
@@ -689,7 +686,7 @@ function loginView() {
     err.textContent = tr("googleConnecting");
     btn.disabled = true;
     try {
-      if (!state.driveReady) await ensureDrive(false);
+      if (!state.driveReady) await ensureDrive();
     } catch (ex) {
       err.textContent = tr("googleError");
       btn.disabled = false;

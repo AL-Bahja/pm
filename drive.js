@@ -11,12 +11,16 @@ const Drive = {
     return window.APP_ENV || {};
   },
 
-  clientId() {
-    return (this.env().GOOGLE_CLIENT_ID || "").trim();
+  webAppUrl() {
+    return (this.env().DRIVE_WEBAPP_URL || "").trim();
   },
 
-  apiKey() {
-    return (this.env().GOOGLE_API_KEY || "").trim();
+  secret() {
+    return (this.env().DRIVE_SECRET || "bahja-2026-pm").trim();
+  },
+
+  clientId() {
+    return (this.env().GOOGLE_CLIENT_ID || "").trim();
   },
 
   folderName() {
@@ -27,11 +31,16 @@ const Drive = {
     return (this.env().GOOGLE_DRIVE_EMAIL || "picassomega86@gmail.com").trim().toLowerCase();
   },
 
+  useBridge() {
+    return !!this.webAppUrl();
+  },
+
   configured() {
-    return !!this.clientId();
+    return this.useBridge() || !!this.clientId();
   },
 
   async init() {
+    if (this.useBridge()) return;
     if (!this.clientId()) return;
     await this.loadGis();
     this.tokenClient = google.accounts.oauth2.initTokenClient({
@@ -65,7 +74,29 @@ const Drive = {
     });
   },
 
-  signIn(silent) {
+  async callBridge(payload) {
+    const res = await fetch(this.webAppUrl(), {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(Object.assign({ secret: this.secret() }, payload))
+    });
+    const text = await res.text();
+    let body;
+    try {
+      body = JSON.parse(text);
+    } catch (err) {
+      throw new Error("bridge");
+    }
+    if (!body || !body.ok) throw new Error((body && body.error) || "bridge");
+    return body;
+  },
+
+  async signIn() {
+    if (this.useBridge()) {
+      this.profile = { email: this.expectedEmail() };
+      this.token = "bridge";
+      return this.profile;
+    }
     return new Promise((resolve, reject) => {
       if (!this.tokenClient) {
         reject(new Error("not-init"));
@@ -85,19 +116,13 @@ const Drive = {
           reject(err);
         }
       };
-      this.tokenClient.requestAccessToken({ prompt: silent ? "" : this.token ? "" : "consent" });
+      this.tokenClient.requestAccessToken({ prompt: this.token ? "" : "consent" });
     });
   },
 
   signOut() {
-    if (this.token && window.google && google.accounts && google.accounts.oauth2) {
-      google.accounts.oauth2.revoke(this.token, () => {});
-    }
     this.token = null;
     this.profile = null;
-    this.folderId = null;
-    this.dataFileId = null;
-    this.attachmentsFolderId = null;
   },
 
   async getProfile() {
@@ -108,176 +133,51 @@ const Drive = {
     return res.json();
   },
 
-  async api(url, options) {
-    const opts = options || {};
-    const headers = Object.assign({}, opts.headers || {});
-    if (this.token) headers.Authorization = "Bearer " + this.token;
-    if (this.apiKey() && !url.includes("key=")) {
-      url += (url.includes("?") ? "&" : "?") + "key=" + encodeURIComponent(this.apiKey());
-    }
-    const res = await fetch(url, Object.assign({}, opts, { headers }));
-    if (res.status === 401 && this.tokenClient) {
-      await this.signIn();
-      headers.Authorization = "Bearer " + this.token;
-      const retry = await fetch(url, Object.assign({}, opts, { headers }));
-      if (!retry.ok) {
-        const t = await retry.text();
-        throw new Error(t || String(retry.status));
-      }
-      return retry;
-    }
-    if (!res.ok) {
-      const t = await res.text();
-      throw new Error(t || String(res.status));
-    }
-    return res;
-  },
-
-  async findFile(name, parentId, mime) {
-    const parts = ["trashed=false", "name='" + name.replace(/'/g, "\\'") + "'"];
-    if (parentId) parts.push("'" + parentId + "' in parents");
-    if (mime) parts.push("mimeType='" + mime + "'");
-    const q = encodeURIComponent(parts.join(" and "));
-    const res = await this.api(
-      "https://www.googleapis.com/drive/v3/files?pageSize=10&fields=files(id,name,mimeType,webViewLink,webContentLink)&q=" + q
-    );
-    const body = await res.json();
-    return (body.files && body.files[0]) || null;
-  },
-
-  async createFolder(name, parentId) {
-    const meta = {
-      name,
-      mimeType: "application/vnd.google-apps.folder"
-    };
-    if (parentId) meta.parents = [parentId];
-    const res = await this.api("https://www.googleapis.com/drive/v3/files?fields=id,name", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(meta)
-    });
-    return res.json();
-  },
-
-  async ensureStore() {
-    const folderMime = "application/vnd.google-apps.folder";
-    let appFolder = await this.findFile(this.folderName(), null, folderMime);
-    if (!appFolder) appFolder = await this.createFolder(this.folderName());
-    this.folderId = appFolder.id;
-
-    let attachments = await this.findFile("Attachments", this.folderId, folderMime);
-    if (!attachments) attachments = await this.createFolder("Attachments", this.folderId);
-    this.attachmentsFolderId = attachments.id;
-
-    let dataFile = await this.findFile("project_data.json", this.folderId, "application/json");
-    if (!dataFile) dataFile = await this.findFile("project_data.json", this.folderId);
-    if (!dataFile) {
-      const created = await this.createJsonFile("project_data.json", this.folderId, { users: [], projects: [] });
-      this.dataFileId = created.id;
-    } else {
-      this.dataFileId = dataFile.id;
-    }
-  },
-
-  async createJsonFile(name, parentId, data) {
-    const metadata = {
-      name,
-      mimeType: "application/json",
-      parents: parentId ? [parentId] : undefined
-    };
-    const form = new FormData();
-    form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
-    form.append("file", new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
-    const res = await this.api("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name", {
-      method: "POST",
-      body: form
-    });
-    return res.json();
-  },
-
   async loadData() {
-    const res = await this.api(
-      "https://www.googleapis.com/drive/v3/files/" + this.dataFileId + "?alt=media"
-    );
-    const text = await res.text();
-    if (!text) return { users: [], projects: [] };
-    return JSON.parse(text);
+    if (this.useBridge()) {
+      const body = await this.callBridge({ action: "load" });
+      return body.data || { users: [], projects: [] };
+    }
+    throw new Error("no-store");
   },
 
   saveData(data) {
-    this.saveQueue = this.saveQueue
-      .catch(() => {})
-      .then(() =>
-        this.api("https://www.googleapis.com/upload/drive/v3/files/" + this.dataFileId + "?uploadType=media", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data)
-        })
-      )
-      .then(() => true);
-    return this.saveQueue;
+    if (this.useBridge()) {
+      this.saveQueue = this.saveQueue.catch(() => {}).then(() => this.callBridge({ action: "save", data: data }));
+      return this.saveQueue;
+    }
+    return Promise.reject(new Error("no-store"));
   },
 
   async uploadAttachment(file) {
-    const metadata = {
-      name: Date.now() + "-" + file.name,
-      parents: [this.attachmentsFolderId]
-    };
-    const form = new FormData();
-    form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
-    form.append("file", file);
-    const res = await this.api(
-      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink,mimeType,size",
-      { method: "POST", body: form }
-    );
-    const created = await res.json();
-    try {
-      await this.api("https://www.googleapis.com/drive/v3/files/" + created.id + "/permissions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: "reader", type: "anyone" })
-      });
-    } catch (err) {
-      /* private file still usable while signed in */
-    }
-    const infoRes = await this.api(
-      "https://www.googleapis.com/drive/v3/files/" + created.id + "?fields=id,name,webViewLink,webContentLink,mimeType,size"
-    );
-    const info = await infoRes.json();
-    return {
-      id: created.id,
+    if (!this.useBridge()) throw new Error("no-store");
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+    const body = await this.callBridge({
+      action: "upload",
       name: file.name,
-      type: file.type || info.mimeType,
-      size: Number(file.size || info.size || 0),
-      driveFileId: info.id,
-      url: info.webViewLink || info.webContentLink || ""
-    };
+      type: file.type || "application/octet-stream",
+      size: file.size,
+      base64: base64
+    });
+    return body.file;
   },
 
   async openAttachment(meta) {
-    const id = meta.driveFileId || meta.id;
-    if (meta.url && meta.url.indexOf("http") === 0) {
+    if (meta.url && String(meta.url).indexOf("http") === 0) {
       window.open(meta.url, "_blank", "noopener");
-      return;
     }
-    const res = await this.api("https://www.googleapis.com/drive/v3/files/" + id + "?alt=media");
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = meta.name || "file";
-    a.target = "_blank";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
   },
 
   async deleteAttachment(meta) {
     const id = meta && (meta.driveFileId || meta.id);
-    if (!id) return;
+    if (!id || !this.useBridge()) return;
     try {
-      await this.api("https://www.googleapis.com/drive/v3/files/" + id, { method: "DELETE" });
+      await this.callBridge({ action: "delete", id: id });
     } catch (err) {
       /* ignore */
     }
