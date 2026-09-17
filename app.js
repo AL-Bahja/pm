@@ -22,7 +22,8 @@ const I18N = {
     copyProject: "نسخ المشروع",
     copied: "نسخة",
     projectName: "اسم المشروع",
-    hospital: "المستشفى / الموقع",
+    hospital: "اسم المستشفى",
+    location: "الموقع",
     device: "نوع الجهاز",
     mri: "رنين مغناطيسي",
     ct: "مفراس",
@@ -86,7 +87,10 @@ const I18N = {
     fieldLong: "نص طويل",
     fieldDevice: "نوع جهاز",
     customizeFields: "تخصيص الحقول",
-    infoFieldsHint: "مدير المشاريع يحدد الحقول التي تظهر في معلومات كل مشروع.",
+    infoFieldsHint: "الحقول الثلاثة الأولى ثابتة. أضف أي معلومة أخرى يدوياً بالاسم العربي والإنجليزي.",
+    extraFieldAr: "عنوان الحقل بالعربي",
+    extraFieldEn: "عنوان الحقل بالإنجليزي",
+    extraValue: "المعلومة",
     savedOk: "تم الحفظ",
     coreField: "حقل أساسي لا يمكن حذفه.",
     lastDevice: "يجب الإبقاء على نوع جهاز واحد على الأقل.",
@@ -170,7 +174,8 @@ const I18N = {
     copyProject: "Copy project",
     copied: "copy",
     projectName: "Project name",
-    hospital: "Hospital / site",
+    hospital: "Hospital name",
+    location: "Location",
     device: "Device type",
     mri: "MRI",
     ct: "CT scanner",
@@ -234,7 +239,10 @@ const I18N = {
     fieldLong: "Long text",
     fieldDevice: "Device type",
     customizeFields: "Customize fields",
-    infoFieldsHint: "The project manager chooses which fields appear in each project's information.",
+    infoFieldsHint: "The first three fields are fixed. Add any other detail with Arabic and English labels.",
+    extraFieldAr: "Field title in Arabic",
+    extraFieldEn: "Field title in English",
+    extraValue: "Value",
     savedOk: "Saved",
     coreField: "This is a required field and cannot be deleted.",
     lastDevice: "Keep at least one device type.",
@@ -453,32 +461,14 @@ function defaultDevices() {
   ];
 }
 
-function defaultInfoFields() {
-  return [
-    { id: "name", ar: "اسم المشروع", en: "Project name", type: "text", core: true },
-    { id: "hospital", ar: "المستشفى / الموقع", en: "Hospital / site", type: "text" },
-    { id: "device", ar: "نوع الجهاز", en: "Device type", type: "device", core: true }
-  ];
-}
-
-function fieldLabel(field) {
-  if (!field) return "";
-  return state.lang === "ar" ? field.ar : field.en;
-}
-
-function projectInfoValue(project, field) {
-  if (!project || !field) return "";
-  if (project.info && project.info[field.id] != null && project.info[field.id] !== "") return String(project.info[field.id]);
-  if (field.id === "name") return project.name || "";
-  if (field.id === "hospital") return project.hospital || "";
-  if (field.id === "device") return project.device || "";
-  return "";
+function extraLabel(row) {
+  if (!row) return "";
+  return state.lang === "ar" ? row.ar : row.en;
 }
 
 function seed() {
   return {
     devices: defaultDevices(),
-    infoFields: defaultInfoFields(),
     users: [
       { id: "u1", username: "manager", password: "manager123", role: "pm", deviceScope: "all", roleTitle: "", name: "مدير المشاريع", email: "picassomega86@gmail.com" },
       { id: "u2", username: "viewer", password: "viewer123", role: "other", deviceScope: "all", roleTitle: "مراقب ميداني", name: "مراقب ميداني", email: "" }
@@ -489,14 +479,6 @@ function seed() {
 
 function migrate(data) {
   if (!Array.isArray(data.devices) || !data.devices.length) data.devices = defaultDevices();
-  if (!Array.isArray(data.infoFields) || !data.infoFields.length) data.infoFields = defaultInfoFields();
-  else {
-    defaultInfoFields()
-      .filter((f) => f.core)
-      .forEach((f) => {
-        if (!data.infoFields.some((x) => x.id === f.id)) data.infoFields.unshift(f);
-      });
-  }
   (data.users || []).forEach((u) => {
     if (u.role === "viewer") {
       u.role = "other";
@@ -508,10 +490,24 @@ function migrate(data) {
   });
   (data.projects || []).forEach((p) => {
     if (!p.files) p.files = [];
-    if (!p.info) p.info = {};
-    if (p.name && !p.info.name) p.info.name = p.name;
-    if (p.hospital && !p.info.hospital) p.info.hospital = p.hospital;
-    if (p.device && !p.info.device) p.info.device = p.device;
+    if (!p.location) p.location = (p.info && p.info.location) || "";
+    if (!Array.isArray(p.extra)) {
+      p.extra = [];
+      const skip = { name: 1, hospital: 1, location: 1, device: 1 };
+      (data.infoFields || []).forEach((f) => {
+        if (!f || skip[f.id] || f.core) return;
+        p.extra.push({
+          id: f.id,
+          ar: f.ar || f.id,
+          en: f.en || f.id,
+          value: (p.info && p.info[f.id]) || ""
+        });
+      });
+      Object.keys(p.info || {}).forEach((id) => {
+        if (skip[id] || p.extra.some((x) => x.id === id)) return;
+        p.extra.push({ id, ar: id, en: id, value: p.info[id] || "" });
+      });
+    }
     (p.tasks || []).forEach(function walk(task) {
       if (!task.children) task.children = [];
       if (!task.costFiles) task.costFiles = [];
@@ -970,7 +966,7 @@ function projectsView() {
     <div class="card" style="padding:8px 16px; overflow:auto">
       <table>
         <thead><tr>
-          <th>${tr("projectName")}</th><th>${tr("hospital")}</th><th>${tr("device")}</th>
+          <th>${tr("projectName")}</th><th>${tr("hospital")}</th><th>${tr("location")}</th>
           <th>${tr("progress")}</th><th>${tr("plannedCost")}</th><th>${tr("actualCost")}</th>
           <th>${tr("plannedDays")}</th><th>${tr("actualDays")}</th><th></th>
         </tr></thead>
@@ -983,7 +979,7 @@ function projectsView() {
   list.forEach((p) => {
     const s = projectStats(p);
     const trRow = el(`<tr>
-      <td>${esc(p.name)}</td><td>${esc(p.hospital)}</td><td>${esc(deviceLabel(p.device))}</td>
+      <td>${esc(p.name)}</td><td>${esc(p.hospital)}</td><td>${esc(p.location || "")}</td>
       <td>
         <div class="progress-wrap">
           <div class="progress-track" title="${s.progress}%"><span class="progress-fill" style="width:${s.progress}%"></span></div>
@@ -1028,8 +1024,9 @@ function copyProject(project) {
     id: uid(),
     name: `${project.name} (${tr("copied")})`,
     hospital: project.hospital,
+    location: project.location || "",
     device: project.device,
-    info: { ...(project.info || {}), name: `${project.name} (${tr("copied")})` },
+    extra: (project.extra || []).map((x) => ({ ...x })),
     files: cloneFiles(project.files),
     tasks: (project.tasks || []).map(cloneTask)
   };
@@ -1063,6 +1060,7 @@ function projectView() {
       </div>
       <div class="row no-print">
         <button class="btn secondary" data-info>${tr("projectInfo")}</button>
+        <button class="btn secondary" data-files>${tr("projectFiles")}${(project.files || []).length ? ` (${project.files.length})` : ""}</button>
         <button class="btn secondary" data-rep>${tr("projectReport")}</button>
         ${isPm() ? `<button class="btn secondary" data-copy>${tr("copyProject")}</button>
         <button class="btn danger" data-delp>${tr("delete")}</button>` : ""}
@@ -1078,10 +1076,6 @@ function projectView() {
     <p class="hint gantt-hint no-print">${tr("ganttSwipe")}</p>
     <div class="legend"><span><i class="swatch planned"></i>${tr("planned")}</span><span><i class="swatch actual"></i>${tr("actual")}</span></div>
     <div class="card gantt-wrap">${ganttHtml(project)}</div>
-    <div class="card" style="padding:16px; margin-top:16px">
-      <h3>${tr("projectFiles")}</h3>
-      <div data-proj-files></div>
-    </div>
     <div class="row" style="margin:18px 0 8px; justify-content:space-between">
       <h3>${tr("tasks")}</h3>
       ${isPm() ? `<button class="btn" data-addt>${tr("addTask")}</button>` : ""}
@@ -1105,9 +1099,6 @@ function projectView() {
     tbody.append(taskRow(project, rowInfo.task, rowInfo.parent, rowInfo.index, label, !!rowInfo.depth, isExpanded(rowInfo.task.id), rowInfo.last));
   });
   bindGanttScroll(box);
-  mountFileBox(box.querySelector("[data-proj-files]"), project.files || (project.files = []), () => {
-    save(state.data);
-  });
   box.querySelectorAll("[data-twist]").forEach((btn) => {
     btn.onclick = (e) => {
       e.preventDefault();
@@ -1118,6 +1109,7 @@ function projectView() {
   const addt = box.querySelector("[data-addt]");
   if (addt) addt.onclick = () => openTaskForm(project, null, null);
   box.querySelector("[data-info]").onclick = () => openProjectForm(project);
+  box.querySelector("[data-files]").onclick = () => openProjectFiles(project);
   const copy = box.querySelector("[data-copy]");
   if (copy) copy.onclick = () => copyProject(project);
   box.querySelector("[data-rep]").onclick = () => {
@@ -1451,98 +1443,132 @@ function deviceOptions(selected) {
     .join("");
 }
 
-function fieldInputName(field) {
-  if (field.id === "name") return "name";
-  if (field.id === "device") return "device";
-  if (field.id === "hospital") return "hospital";
-  return "info_" + field.id;
-}
-
-function infoFieldControl(field, project, lockedDevice) {
-  const val = projectInfoValue(project, field);
-  const name = fieldInputName(field);
-  const ro = !isPm() ? "disabled" : "";
-  let control;
-  if (field.type === "device") {
-    if (lockedDevice) {
-      control = `<span class="info-value-text">${esc(deviceLabel(project.device || val))}</span>
-        <input type="hidden" name="${esc(name)}" value="${esc(project.device || val)}">`;
-    } else {
-      control = `<select name="${esc(name)}" ${ro}>${deviceOptions(val)}</select>`;
-    }
-  } else if (field.type === "long") {
-    control = `<textarea name="${esc(name)}" rows="2" ${ro}>${esc(val)}</textarea>`;
-  } else {
-    const req = field.core || field.id === "name" ? "required" : "";
-    control = `<input name="${esc(name)}" value="${esc(val)}" ${req} ${ro}>`;
-  }
-  return `<tr>
-    <th>${esc(fieldLabel(field))}</th>
-    <td>${control}</td>
+function extraRowHtml(row, canEdit) {
+  const ro = canEdit ? "" : "disabled";
+  const del = canEdit ? `<button class="btn small danger" type="button" data-del-extra="${esc(row.id)}">${tr("delete")}</button>` : "";
+  return `<tr data-extra-row="${esc(row.id)}">
+    <th>
+      <div class="info-title">${esc(extraLabel(row))}</div>
+      <input type="hidden" name="extra_ar_${esc(row.id)}" value="${esc(row.ar)}">
+      <input type="hidden" name="extra_en_${esc(row.id)}" value="${esc(row.en)}">
+    </th>
+    <td>
+      <div class="info-val-cell">
+        <input name="extra_val_${esc(row.id)}" value="${esc(row.value || "")}" ${ro}>
+        ${del}
+      </div>
+    </td>
   </tr>`;
 }
 
-function applyProjectInfo(project, fd) {
-  const info = { ...(project.info || {}) };
-  const locked = isPm() && currentUser().deviceScope && currentUser().deviceScope !== "all";
-  (state.data.infoFields || []).forEach((f) => {
-    const key = fieldInputName(f);
-    let val = String(fd.get(key) || "").trim();
-    if ((f.type === "device" || f.id === "device") && locked) val = project.device || val;
-    info[f.id] = val;
-    if (f.id === "name") project.name = val;
-    if (f.id === "hospital") project.hospital = val;
-    if (f.type === "device" || f.id === "device") project.device = val;
+function applyProjectInfo(project, fd, extraIds) {
+  const u = currentUser();
+  const locked = isPm() && u.deviceScope && u.deviceScope !== "all";
+  project.name = String(fd.get("name") || "").trim();
+  project.hospital = String(fd.get("hospital") || "").trim();
+  project.location = String(fd.get("location") || "").trim();
+  project.device = locked ? (project.device || u.deviceScope) : String(fd.get("device") || project.device || "");
+  if (!project.device) project.device = ((state.data.devices || [])[0] || {}).id || "";
+  project.extra = extraIds.map((id) => ({
+    id,
+    ar: String(fd.get("extra_ar_" + id) || "").trim(),
+    en: String(fd.get("extra_en_" + id) || "").trim(),
+    value: String(fd.get("extra_val_" + id) || "").trim()
+  })).filter((x) => x.ar || x.en);
+}
+
+function extraIdsFromForm(form) {
+  return [...form.querySelectorAll("[data-extra-row]")].map((row) => row.getAttribute("data-extra-row"));
+}
+
+function bindExtraEditor(modal) {
+  const tbody = modal.querySelector("[data-info-body]");
+  const add = modal.querySelector("[data-add-extra]");
+  if (!add || !tbody) return;
+  add.onclick = (e) => {
+    e.preventDefault();
+    const ar = String(modal.querySelector('[name="new_ar"]').value || "").trim();
+    const en = String(modal.querySelector('[name="new_en"]').value || "").trim();
+    const err = modal.querySelector(".error");
+    if (!ar || !en) {
+      err.textContent = tr("required");
+      return;
+    }
+    err.textContent = "";
+    const id = uid();
+    tbody.insertAdjacentHTML("beforeend", extraRowHtml({ id, ar, en, value: "" }, true));
+    modal.querySelector('[name="new_ar"]').value = "";
+    modal.querySelector('[name="new_en"]').value = "";
+    bindExtraDeletes(modal);
+  };
+  bindExtraDeletes(modal);
+}
+
+function bindExtraDeletes(modal) {
+  modal.querySelectorAll("[data-del-extra]").forEach((btn) => {
+    btn.onclick = (e) => {
+      e.preventDefault();
+      const row = modal.querySelector(`[data-extra-row="${btn.getAttribute("data-del-extra")}"]`);
+      if (row) row.remove();
+    };
   });
-  project.info = info;
-  if (!project.name) project.name = info.name || "";
-  if (!project.device) project.device = info.device || ((state.data.devices || [])[0] || {}).id || "";
 }
 
 function openProjectForm(project) {
   const u = currentUser();
-  const locked = isPm() && u.deviceScope && u.deviceScope !== "all";
+  const canEdit = isPm();
+  const locked = canEdit && u.deviceScope && u.deviceScope !== "all";
   const p = project || {
     name: "",
     hospital: "",
+    location: "",
     device: locked ? u.deviceScope : ((state.data.devices || [])[0] || {}).id || "",
-    info: {}
+    extra: []
   };
-  if (!project && locked) p.info = { device: u.deviceScope };
-  const fields = (state.data.infoFields || []).map((f) => infoFieldControl(f, p, locked)).join("");
-  const extra = isCompanyPm()
-    ? `<div class="row" style="margin-top:8px"><button class="btn secondary" type="button" data-customfields>${tr("customizeFields")}</button></div>`
+  const ro = canEdit ? "" : "disabled";
+  const deviceCell = locked
+    ? `<span class="info-value-text">${esc(deviceLabel(p.device))}</span><input type="hidden" name="device" value="${esc(p.device)}">`
+    : `<select name="device" ${ro}>${deviceOptions(p.device)}</select>`;
+  const extraRows = (p.extra || []).map((row) => extraRowHtml(row, canEdit)).join("");
+  const adder = canEdit
+    ? `<div class="info-add">
+        <input name="new_ar" placeholder="${esc(tr("extraFieldAr"))}" autocomplete="off">
+        <input name="new_en" placeholder="${esc(tr("extraFieldEn"))}" autocomplete="off">
+        <button class="btn secondary small" type="button" data-add-extra>${tr("addField")}</button>
+      </div>`
     : "";
   showForm(`
-    <h3>${project ? tr("projectInfo") : tr("addProject")}</h3>
+    <h3>${tr("projectInfo")}</h3>
     <table class="info-table">
-      <tbody>
-        ${fields}
+      <tbody data-info-body>
+        <tr><th>${tr("projectName")}</th><td><input name="name" value="${esc(p.name)}" required ${ro}></td></tr>
+        <tr><th>${tr("hospital")}</th><td><input name="hospital" value="${esc(p.hospital || "")}" required ${ro}></td></tr>
+        <tr><th>${tr("location")}</th><td><input name="location" value="${esc(p.location || "")}" ${ro}></td></tr>
+        <tr><th>${tr("device")}</th><td>${deviceCell}</td></tr>
+        ${extraRows}
       </tbody>
     </table>
-    ${extra}
-  `, (fd) => {
-    if (!isPm()) return;
-    if (project) applyProjectInfo(project, fd);
+    ${adder}
+  `, (fd, modal) => {
+    if (!canEdit) return;
+    if (project) applyProjectInfo(project, fd, extraIdsFromForm(modal.querySelector("form") || modal));
     else {
-      const created = { id: uid(), files: [], tasks: [], info: {} };
-      applyProjectInfo(created, fd);
+      const created = { id: uid(), files: [], tasks: [], extra: [] };
+      applyProjectInfo(created, fd, extraIdsFromForm(modal.querySelector("form") || modal));
       state.data.projects.push(created);
     }
     return save(state.data, true);
   });
-  const fieldsBtn = document.querySelector("[data-customfields]");
-  if (fieldsBtn) {
-    fieldsBtn.onclick = (e) => {
-      e.preventDefault();
-      state._afterModal = () => openInfoFieldsManager(project);
-      state.modal = null;
-      render();
-      const next = state._afterModal;
-      state._afterModal = null;
-      if (next) next();
-    };
-  }
+  bindExtraEditor(state.modal);
+}
+
+function openProjectFiles(project) {
+  if (!project.files) project.files = [];
+  showForm(`
+    <h3>${tr("projectFiles")}</h3>
+    <div data-proj-files></div>
+  `, () => {});
+  mountFileBox(document.querySelector("[data-proj-files]"), project.files, () => save(state.data));
 }
 
 function openTaskForm(project, taskItem, parent) {
@@ -1790,7 +1816,7 @@ function reportsView() {
       </div>
     </div>
     ${single ? `<h1 class="report-title">${esc(list[0].name)}</h1>
-      <p class="muted">${esc(list[0].hospital)} · ${esc(deviceLabel(list[0].device))}</p>` : `<h1 class="report-title">${tr("allProjects")}</h1>`}
+      <p class="muted">${esc(list[0].hospital || "")}${list[0].location ? " · " + esc(list[0].location) : ""}</p>` : `<h1 class="report-title">${tr("allProjects")}</h1>`}
     <div class="card" style="padding:8px 16px; overflow:auto; margin-top:16px">
       ${reportTable(list, !!single, state.reportShowSubs)}
     </div>
@@ -1845,17 +1871,6 @@ function usersView() {
         <tbody data-devs></tbody>
       </table>
     </div>
-    <div class="row" style="justify-content:space-between; margin-top:22px">
-      <h2>${tr("infoFields")}</h2>
-      <button class="btn secondary" data-addfield>${tr("addField")}</button>
-    </div>
-    <p class="hint">${tr("infoFieldsHint")}</p>
-    <div class="card" style="padding:8px 16px; margin-top:12px; overflow:auto">
-      <table>
-        <thead><tr><th>${tr("deviceNameAr")}</th><th>${tr("deviceNameEn")}</th><th>${tr("fieldType")}</th><th></th></tr></thead>
-        <tbody data-fields></tbody>
-      </table>
-    </div>
   </div>`);
   const tbody = box.querySelector("tbody");
   state.data.users.forEach((u) => {
@@ -1900,28 +1915,8 @@ function usersView() {
     };
     devs.append(row);
   });
-  const fieldsBody = box.querySelector("[data-fields]");
-  (state.data.infoFields || []).forEach((f) => {
-    const typeKey = f.type === "device" ? "fieldDevice" : f.type === "long" ? "fieldLong" : "fieldText";
-    const row = el(`<tr>
-      <td>${esc(f.ar)}</td><td>${esc(f.en)}</td><td>${esc(tr(typeKey))}</td>
-      <td class="row">
-        <button class="btn small" data-edf>${tr("edit")}</button>
-        ${f.core ? "" : `<button class="btn small danger" data-delf>${tr("delete")}</button>`}
-      </td>
-    </tr>`);
-    row.querySelector("[data-edf]").onclick = () => openInfoFieldForm(f);
-    const delf = row.querySelector("[data-delf]");
-    if (delf) delf.onclick = () => {
-      state.data.infoFields = state.data.infoFields.filter((x) => x.id !== f.id);
-      save(state.data);
-      render();
-    };
-    fieldsBody.append(row);
-  });
   box.querySelector("[data-add]").onclick = () => openUserForm(null);
   box.querySelector("[data-adddev]").onclick = () => openDeviceForm();
-  box.querySelector("[data-addfield]").onclick = () => openInfoFieldForm();
   return box;
 }
 
@@ -2009,101 +2004,6 @@ function openDeviceForm(device) {
       state.data.devices.push({ id: finalId, ar, en });
     }
     return save(state.data, true);
-  });
-}
-
-function openInfoFieldForm(field, project) {
-  const f = field || { ar: "", en: "", type: "text" };
-  showForm(`
-    <h3>${field ? tr("editField") : tr("addField")}</h3>
-    <label>${tr("deviceNameAr")}<input name="ar" value="${esc(f.ar)}" required></label>
-    <label>${tr("deviceNameEn")}<input name="en" value="${esc(f.en)}" required></label>
-    <label>${tr("fieldType")}<select name="type" ${field && field.core ? "disabled" : ""}>
-      <option value="text">${tr("fieldText")}</option>
-      <option value="long">${tr("fieldLong")}</option>
-      <option value="device">${tr("fieldDevice")}</option>
-    </select></label>
-  `, (fd) => {
-    const ar = String(fd.get("ar") || "").trim();
-    const en = String(fd.get("en") || "").trim();
-    if (!ar || !en) return false;
-    const type = field && field.core ? field.type : String(fd.get("type") || "text");
-    if (field) {
-      field.ar = ar;
-      field.en = en;
-      if (!field.core) field.type = type;
-    } else {
-      const id = en.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || uid();
-      const finalId = (state.data.infoFields || []).some((x) => x.id === id) ? id + "-" + uid() : id;
-      state.data.infoFields = state.data.infoFields || [];
-      state.data.infoFields.push({ id: finalId, ar, en, type });
-    }
-    return save(state.data, true).then(() => {
-      if (project !== undefined) state._afterModal = () => openProjectForm(project);
-    });
-  });
-  const typeSel = document.querySelector('select[name="type"]');
-  if (typeSel) typeSel.value = f.type === "device" || f.type === "long" ? f.type : "text";
-}
-
-function openInfoFieldsManager(project) {
-  const rows = (state.data.infoFields || [])
-    .map((f) => {
-      const typeKey = f.type === "device" ? "fieldDevice" : f.type === "long" ? "fieldLong" : "fieldText";
-      return `<tr>
-        <td>${esc(f.ar)}</td><td>${esc(f.en)}</td><td>${esc(tr(typeKey))}</td>
-        <td class="row">
-          <button class="btn small" type="button" data-edf="${esc(f.id)}">${tr("edit")}</button>
-          ${f.core ? "" : `<button class="btn small danger" type="button" data-delf="${esc(f.id)}">${tr("delete")}</button>`}
-        </td>
-      </tr>`;
-    })
-    .join("");
-  showForm(`
-    <h3>${tr("infoFields")}</h3>
-    <p class="hint">${tr("infoFieldsHint")}</p>
-    <div class="card" style="padding:8px 12px; overflow:auto">
-      <table>
-        <thead><tr><th>${tr("deviceNameAr")}</th><th>${tr("deviceNameEn")}</th><th>${tr("fieldType")}</th><th></th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-    <div class="row" style="margin-top:10px">
-      <button class="btn secondary" type="button" data-addfield>${tr("addField")}</button>
-    </div>
-  `, () => {
-    if (project) state._afterModal = () => openProjectForm(project);
-  });
-  const modal = state.modal;
-  const add = modal.querySelector("[data-addfield]");
-  if (add) add.onclick = () => {
-    state.modal = null;
-    render();
-    openInfoFieldForm(null, project);
-  };
-  modal.querySelectorAll("[data-edf]").forEach((btn) => {
-    btn.onclick = () => {
-      const f = (state.data.infoFields || []).find((x) => x.id === btn.getAttribute("data-edf"));
-      state.modal = null;
-      render();
-      openInfoFieldForm(f, project);
-    };
-  });
-  modal.querySelectorAll("[data-delf]").forEach((btn) => {
-    btn.onclick = () => {
-      const id = btn.getAttribute("data-delf");
-      const f = (state.data.infoFields || []).find((x) => x.id === id);
-      if (!f || f.core) {
-        alert(tr("coreField"));
-        return;
-      }
-      state.data.infoFields = state.data.infoFields.filter((x) => x.id !== id);
-      save(state.data, true).then(() => {
-        state.modal = null;
-        render();
-        openInfoFieldsManager(project);
-      });
-    };
   });
 }
 

@@ -56,6 +56,15 @@ h1, h2, h3 { margin: 0 0 8px; }
 .hint { font-size: 13px; background: #f4f8fa; padding: 10px 12px; border-radius: 10px; }
 
 label { display: block; font-weight: 600; margin: 14px 0 6px; }
+label.file-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  font-weight: 600;
+  cursor: pointer;
+  box-sizing: border-box;
+}
 input, select, textarea {
   width: 100%;
   padding: 10px 12px;
@@ -294,7 +303,6 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 .file-box { margin-top: 8px; }
 .file-list { list-style: none; padding: 0; margin: 0 0 8px; }
 .file-list li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 4px 0; }
-.file-btn { display: inline-block; }
 .chk { display: flex; align-items: center; gap: 6px; font-weight: 600; margin: 0; }
 .report-title { font-size: 22px; margin: 12px 0 4px; }
 .report-sub { color: var(--muted); }
@@ -347,6 +355,24 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 }
 .info-table textarea { min-height: 44px; }
 .info-value-text { display: block; padding: 2px 0; }
+.info-title { font-weight: 600; }
+.info-val-cell { display: flex; gap: 8px; align-items: center; }
+.info-val-cell input { flex: 1; }
+.info-add {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: center;
+}
+.info-add input {
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+@media (max-width: 640px) {
+  .info-add { grid-template-columns: 1fr; }
+}
 .save-toast {
   position: fixed;
   bottom: 28px;
