@@ -313,6 +313,40 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   display: grid; place-items: center; padding: 16px; z-index: 20;
 }
 .modal { width: min(720px, 100%); max-height: 90vh; overflow: auto; padding: 22px; }
+.info-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 8px 0 4px;
+}
+.info-table th,
+.info-table td {
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  vertical-align: middle;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.info-table th {
+  width: 38%;
+  font-weight: 600;
+  background: #f4f8fa;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.info-table td { font-weight: 500; }
+.info-table input,
+.info-table select,
+.info-table textarea {
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 13px;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+}
+.info-table textarea { min-height: 44px; }
+.info-value-text { display: block; padding: 2px 0; }
 .save-toast {
   position: fixed;
   bottom: 28px;

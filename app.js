@@ -1462,18 +1462,24 @@ function infoFieldControl(field, project, lockedDevice) {
   const val = projectInfoValue(project, field);
   const name = fieldInputName(field);
   const ro = !isPm() ? "disabled" : "";
+  let control;
   if (field.type === "device") {
     if (lockedDevice) {
-      return `<p>${esc(fieldLabel(field))}: <b>${esc(deviceLabel(project.device || val))}</b></p>
+      control = `<span class="info-value-text">${esc(deviceLabel(project.device || val))}</span>
         <input type="hidden" name="${esc(name)}" value="${esc(project.device || val)}">`;
+    } else {
+      control = `<select name="${esc(name)}" ${ro}>${deviceOptions(val)}</select>`;
     }
-    return `<label>${esc(fieldLabel(field))}<select name="${esc(name)}" ${ro}>${deviceOptions(val)}</select></label>`;
+  } else if (field.type === "long") {
+    control = `<textarea name="${esc(name)}" rows="2" ${ro}>${esc(val)}</textarea>`;
+  } else {
+    const req = field.core || field.id === "name" ? "required" : "";
+    control = `<input name="${esc(name)}" value="${esc(val)}" ${req} ${ro}>`;
   }
-  if (field.type === "long") {
-    return `<label>${esc(fieldLabel(field))}<textarea name="${esc(name)}" ${ro}>${esc(val)}</textarea></label>`;
-  }
-  const req = field.core || field.id === "name" ? "required" : "";
-  return `<label>${esc(fieldLabel(field))}<input name="${esc(name)}" value="${esc(val)}" ${req} ${ro}></label>`;
+  return `<tr>
+    <th>${esc(fieldLabel(field))}</th>
+    <td>${control}</td>
+  </tr>`;
 }
 
 function applyProjectInfo(project, fd) {
@@ -1509,7 +1515,11 @@ function openProjectForm(project) {
     : "";
   showForm(`
     <h3>${project ? tr("projectInfo") : tr("addProject")}</h3>
-    ${fields}
+    <table class="info-table">
+      <tbody>
+        ${fields}
+      </tbody>
+    </table>
     ${extra}
   `, (fd) => {
     if (!isPm()) return;
