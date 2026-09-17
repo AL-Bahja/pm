@@ -259,13 +259,11 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
     --date-w: 0px;
     --lock-w: 128px;
     --row-h: 28px;
-    --head-h: 44px;
+    --head-h: 48px;
   }
   .gantt-sticky-name { grid-template-columns: var(--name-w); }
   .gantt-dates-p, .gantt-dates-a { display: none; }
-  .gantt-days { display: none; }
-  .gantt-head { --head-h: 32px; height: 32px; }
-  .gantt-head .gantt-name, .gantt-head .gantt-col { height: 32px; padding-bottom: 4px; }
+  .gantt-day { font-size: 8px; }
   .bar { height: 8px; }
   .bar.planned { top: 4px; }
   .bar.actual { top: 16px; }

@@ -1153,7 +1153,7 @@ function ganttHtml(project) {
   const min = startOfMonth(new Date(Math.min(...dates)));
   const max = endOfMonth(new Date(Math.max(...dates)));
   const days = enumerateDays(min, max);
-  const dayW = window.matchMedia("(max-width: 800px)").matches ? 12 : 16;
+  const dayW = window.matchMedia("(max-width: 800px)").matches ? 14 : 16;
   const scaleW = days.length * dayW;
   const years = groupDays(days, (d) => String(d.getFullYear()));
   const months = groupDays(days, (d) => `${d.getFullYear()}-${d.getMonth()}`);
