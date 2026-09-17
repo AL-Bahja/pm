@@ -65,7 +65,7 @@ const Drive = {
     });
   },
 
-  signIn() {
+  signIn(silent) {
     return new Promise((resolve, reject) => {
       if (!this.tokenClient) {
         reject(new Error("not-init"));
@@ -85,7 +85,7 @@ const Drive = {
           reject(err);
         }
       };
-      this.tokenClient.requestAccessToken({ prompt: this.token ? "" : "consent" });
+      this.tokenClient.requestAccessToken({ prompt: silent ? "" : this.token ? "" : "consent" });
     });
   },
 

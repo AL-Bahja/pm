@@ -5,7 +5,12 @@ const I18N = {
     username: "اسم المستخدم",
     password: "كلمة المرور",
     enter: "دخول",
-    demo: "تجريبي: المدير manager / manager123 — المراقب viewer / viewer123",
+    demo: "",
+    loginHint: "أدخل اسم المستخدم وكلمة المرور.",
+    mustChangePass: "لأمان النظام، غيّر كلمة المرور الافتراضية قبل المتابعة.",
+    weakPassword: "اختر كلمة مرور جديدة من 8 أحرف على الأقل، وليست الكلمة الافتراضية.",
+    noProjects: "لا توجد مشاريع بعد. أضف المشروع الأول من الزر أعلاه.",
+    installHint: "من Chrome أو Edge: القائمة ⋮ ثم تثبيت التطبيق — يبقى نفس الرابط ويسهل التعديل لاحقاً من المشروع.",
     lang: "English",
     projects: "المشاريع",
     reports: "التقارير",
@@ -97,19 +102,19 @@ const I18N = {
     showGantt: "إظهار مخطط الجانت",
     attachments: "مرفقات",
     total: "الإجمالي",
-    storageHint: "المشاريع تُحفظ داخل هذا المتصفح وهذه الطريقة للفتح فقط. فتح الملف من المجلد يختلف عن فتح http://127.0.0.1:8765 — كل واحدة لها بيانات منفصلة.",
+    storageHint: "البيانات مشتركة عبر جوجل درايف للشركة. نفس المشاريع تظهر من أي حاسبة بعد ربط حساب الشركة ثم دخول النظام.",
     exportData: "تصدير نسخة احتياطية",
     importData: "استيراد نسخة احتياطية",
     importOk: "تم استيراد البيانات. أعد تسجيل الدخول إن لزم.",
     importBad: "ملف النسخة الاحتياطية غير صالح.",
-    googleConnect: "الاتصال بجوجل درايف",
+    googleConnect: "ربط تخزين الشركة",
     googleNeedConfig: "ضع GOOGLE_CLIENT_ID في ملف .env ثم حدّث الصفحة.",
     googleConnecting: "جاري الاتصال بجوجل درايف…",
     googleLoading: "جاري قراءة project_data.json من درايف…",
     googleSaving: "جاري الحفظ على درايف…",
     googleSaved: "محفوظ على درايف",
     googleError: "تعذر الاتصال بجوجل درايف",
-    googleHint: "سجّل الدخول بحساب picassomega86@gmail.com. يُنشأ مجلد Bahja-PM وملف project_data.json ومجلد Attachments تلقائياً.",
+    googleHint: "من أي حاسبة: اربط جوجل درايف بحساب الشركة picassomega86@gmail.com (هذا التخزين المشترك). بعد ذلك يظهر دخول النظام: مدير المشاريع أو مستخدم آخر.",
     googleWrongAccount: "يفضّل استخدام حساب درايف الشركة:",
     driveFolder: "مجلد التطبيق"
   },
@@ -119,7 +124,12 @@ const I18N = {
     username: "Username",
     password: "Password",
     enter: "Sign in",
-    demo: "Demo: manager / manager123 — viewer / viewer123",
+    demo: "",
+    loginHint: "Enter your username and password.",
+    mustChangePass: "For security, change the default password before continuing.",
+    weakPassword: "Choose a new password of at least 8 characters, not the default one.",
+    noProjects: "No projects yet. Add the first project with the button above.",
+    installHint: "In Chrome or Edge: menu ⋮ then Install app — same link, and you can still change the code later.",
     lang: "العربية",
     projects: "Projects",
     reports: "Reports",
@@ -211,19 +221,19 @@ const I18N = {
     showGantt: "Show Gantt chart",
     attachments: "Attachments",
     total: "Total",
-    storageHint: "Projects are saved in this browser and this address only. Opening the file from the folder is different from http://127.0.0.1:8765 — each has its own data.",
+    storageHint: "Data is shared on the company Google Drive. The same projects appear on any PC after connecting the company account, then signing in.",
     exportData: "Export backup",
     importData: "Import backup",
     importOk: "Data imported. Sign in again if needed.",
     importBad: "Backup file is not valid.",
-    googleConnect: "Connect Google Drive",
+    googleConnect: "Connect company storage",
     googleNeedConfig: "Put GOOGLE_CLIENT_ID in the .env file, then refresh.",
     googleConnecting: "Connecting to Google Drive…",
     googleLoading: "Reading project_data.json from Drive…",
     googleSaving: "Saving to Drive…",
     googleSaved: "Saved to Drive",
     googleError: "Could not connect to Google Drive",
-    googleHint: "Sign in with picassomega86@gmail.com. The app creates folder Bahja-PM, project_data.json, and Attachments.",
+    googleHint: "On any PC, connect Google Drive with the company account picassomega86@gmail.com (shared storage). Then sign in as project manager or another user.",
     googleWrongAccount: "Prefer the company Drive account:",
     driveFolder: "App folder"
   }
@@ -380,42 +390,9 @@ function seed() {
   return {
     users: [
       { id: "u1", username: "manager", password: "manager123", role: "pm", roleTitle: "", name: "مدير المشاريع", email: "picassomega86@gmail.com" },
-      { id: "u2", username: "viewer", password: "viewer123", role: "other", roleTitle: "مراقب ميداني", name: "مراقب ميداني", email: "watch@hospital.local" }
+      { id: "u2", username: "viewer", password: "viewer123", role: "other", roleTitle: "مراقب ميداني", name: "مراقب ميداني", email: "" }
     ],
-    projects: [
-      {
-        id: "p1",
-        name: "تنصيب رنين 1.5T — مستشفى بغداد",
-        hospital: "مدينة الطب، بغداد",
-        device: "mri",
-        files: [],
-        tasks: [
-          makeTask("مسح الموقع", "2026-01-05", "2026-01-12", "2026-01-06", "2026-01-14", 8000000, 9200000, "done"),
-          makeTask("تهيئة الغرفة والتدريع", "2026-01-15", "2026-02-20", "2026-01-16", "2026-02-28", 120000000, 135000000, "done", [
-            makeTask("أعمال مدنية", "2026-01-15", "2026-02-05", "2026-01-16", "2026-02-10", 70000000, 78000000, "done"),
-            makeTask("التدريع والرصاص", "2026-02-06", "2026-02-20", "2026-02-11", "2026-02-28", 50000000, 57000000, "done")
-          ]),
-          makeTask("القدرة والكهرباء والتبريد", "2026-02-21", "2026-03-15", "2026-03-01", "", 45000000, 20000000, "in_progress", [
-            makeTask("التغذية الكهربائية", "2026-02-21", "2026-03-05", "2026-03-01", "", 25000000, 12000000, "in_progress"),
-            makeTask("التبريد والتكييف", "2026-03-06", "2026-03-15", "", "", 20000000, 8000000, "not_started")
-          ]),
-          makeTask("التسليم والتنصيب", "2026-03-16", "2026-04-05", "", "", 80000000, 0, "not_started"),
-          makeTask("المعايرة والتدريب والتسليم", "2026-04-06", "2026-04-25", "", "", 15000000, 0, "not_started")
-        ]
-      },
-      {
-        id: "p2",
-        name: "مفراس 128 شريحة — البصرة",
-        hospital: "البصرة التعليمي",
-        device: "ct",
-        files: [],
-        tasks: [
-          makeTask("مسح الموقع", "2026-02-01", "2026-02-08", "2026-02-01", "2026-02-07", 5000000, 4800000, "done"),
-          makeTask("أعمال مدنية", "2026-02-09", "2026-03-01", "2026-02-10", "", 60000000, 25000000, "delayed"),
-          makeTask("تنصيب الجهاز", "2026-03-02", "2026-03-20", "", "", 70000000, 0, "not_started")
-        ]
-      }
-    ]
+    projects: []
   };
 }
 
@@ -450,7 +427,6 @@ function loadLocalFallback() {
     }
   }
   const data = seed();
-  data.projects.forEach(rollupProject);
   return data;
 }
 
@@ -525,6 +501,13 @@ const state = {
   driveStatus: "init",
   googleProfile: null
 };
+
+const WEAK_PASSWORDS = ["manager123", "viewer123", "12345678", "password"];
+
+function isWeakPassword(pass) {
+  const p = String(pass || "");
+  return p.length < 8 || WEAK_PASSWORDS.includes(p);
+}
 
 function isExpanded(taskId) {
   return !!state.expanded[taskId];
@@ -606,93 +589,64 @@ function render() {
   document.documentElement.dir = state.lang === "ar" ? "rtl" : "ltr";
   document.title = tr("app");
   const root = document.getElementById("app");
-  if (!state.driveReady) {
-    root.replaceChildren(driveGateView());
-    return;
-  }
   const user = currentUser();
   if (!user) {
     root.replaceChildren(loginView());
     return;
   }
+  if (!state.driveReady) {
+    root.replaceChildren(loginView());
+    return;
+  }
+  if (isWeakPassword(user.password)) {
+    root.replaceChildren(passwordGateView(user));
+    return;
+  }
   root.replaceChildren(shellView(user));
 }
 
-function driveGateView() {
-  const missing = !Drive.configured();
+function passwordGateView(user) {
   const box = el(`<div class="login-wrap">
-    <div class="login-card">
-      <div class="brand"><div class="logo">PM</div><div><h1>${tr("app")}</h1><div class="muted">${tr("googleConnect")}</div></div></div>
-      <p class="hint">${tr("googleHint")}</p>
-      ${missing ? `<p class="error">${tr("googleNeedConfig")}</p>` : ""}
-      ${state.driveError ? `<p class="error">${esc(state.driveError)}</p>` : ""}
-      <p class="muted">${state.driveStatus === "connecting" ? tr("googleConnecting") : state.driveStatus === "loading" ? tr("googleLoading") : ""}</p>
-      <div class="row">
-        <button class="btn" type="button" data-gdrive ${missing || state.driveStatus === "connecting" ? "disabled" : ""}>${tr("googleConnect")}</button>
-        <button class="btn ghost" type="button" data-lang>${tr("lang")}</button>
-      </div>
-    </div>
+    <form class="login-card">
+      <div class="brand"><div class="logo">PM</div><div><h1>${tr("changePassword")}</h1><div class="muted">${esc(user.name)}</div></div></div>
+      <p class="hint">${tr("mustChangePass")}</p>
+      <label>${tr("newPassword")}<input name="password" type="password" minlength="8" required></label>
+      <p class="error"></p>
+      <button class="btn" type="submit">${tr("save")}</button>
+    </form>
   </div>`);
-  box.querySelector("[data-lang]").onclick = setLang;
-  const btn = box.querySelector("[data-gdrive]");
-  if (btn) {
-    btn.onclick = () => connectDrive();
-  }
+  box.querySelector("form").onsubmit = (e) => {
+    e.preventDefault();
+    const pass = String(new FormData(e.target).get("password") || "");
+    if (isWeakPassword(pass)) {
+      box.querySelector(".error").textContent = tr("weakPassword");
+      return;
+    }
+    user.password = pass;
+    save(state.data);
+    render();
+  };
   return box;
 }
 
+async function ensureDrive(silent) {
+  if (state.driveReady && Drive.token) return;
+  await Drive.init();
+  await Drive.signIn(!!silent);
+  state.googleProfile = Drive.profile;
+  let remote = await Drive.loadData();
+  const empty =
+    !remote ||
+    ((!(remote.projects && remote.projects.length)) && (!(remote.users && remote.users.length)));
+  if (empty) remote = loadLocalFallback();
+  state.data = migrate(remote);
+  state.driveReady = true;
+  state.driveStatus = "ready";
+  save(state.data);
+}
+
 async function connectDrive() {
-  state.driveStatus = "connecting";
-  state.driveError = "";
-  render();
-  try {
-    await Drive.init();
-    await Drive.signIn();
-    state.googleProfile = Drive.profile;
-    state.driveStatus = "loading";
-    render();
-    let remote = await Drive.loadData();
-    const empty =
-      !remote ||
-      ((!(remote.projects && remote.projects.length)) && (!(remote.users && remote.users.length)));
-    if (empty) remote = loadLocalFallback();
-    state.data = migrate(remote);
-    if (state.googleProfile && state.googleProfile.email) {
-      const email = String(state.googleProfile.email).toLowerCase();
-      let user = state.data.users.find((u) => String(u.email || "").toLowerCase() === email);
-      if (!user && email === Drive.expectedEmail()) {
-        user = state.data.users.find((u) => u.role === "pm") || state.data.users[0];
-        if (user) user.email = email;
-      }
-    }
-    try {
-      const savedSession = JSON.parse(localStorage.getItem(KEY + "-session") || "null");
-      if (savedSession && state.data.users.some((u) => u.id === savedSession.userId)) {
-        state.session = savedSession;
-      }
-    } catch (err) {
-      state.session = null;
-    }
-    if (!currentUser() && state.googleProfile && state.googleProfile.email) {
-      const email = String(state.googleProfile.email).toLowerCase();
-      const matched =
-        state.data.users.find((u) => String(u.email || "").toLowerCase() === email) ||
-        (email === Drive.expectedEmail() ? state.data.users.find((u) => u.role === "pm") : null);
-      if (matched) {
-        state.session = { userId: matched.id };
-        persistSession();
-      }
-    }
-    state.driveReady = true;
-    state.driveStatus = "ready";
-    save(state.data);
-    render();
-  } catch (err) {
-    state.driveReady = false;
-    state.driveStatus = "error";
-    state.driveError = String(err.message || err);
-    render();
-  }
+  return ensureDrive(false);
 }
 
 async function boot() {
@@ -701,7 +655,7 @@ async function boot() {
     await loadEnv();
     await Drive.init().catch(() => {});
   } catch (err) {
-    state.driveError = String(err.message || err);
+    state.driveError = "";
   }
   render();
 }
@@ -716,7 +670,7 @@ function loginView() {
   const box = el(`<div class="login-wrap">
     <form class="login-card">
       <div class="brand"><div class="logo">PM</div><div><h1>${tr("loginTitle")}</h1><div class="muted">${tr("app")}</div></div></div>
-      <p class="hint">${tr("demo")}</p>
+      <p class="hint">${tr("loginHint")}</p>
       <label>${tr("username")}<input name="username" autocomplete="username" required></label>
       <label>${tr("password")}<input name="password" type="password" autocomplete="current-password" required></label>
       <p class="error"></p>
@@ -727,14 +681,26 @@ function loginView() {
     </form>
   </div>`);
   box.querySelector("[data-lang]").onclick = setLang;
-  box.querySelector("form").onsubmit = (e) => {
+  box.querySelector("form").onsubmit = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
+    const err = box.querySelector(".error");
+    const btn = box.querySelector("[type=submit]");
+    err.textContent = "";
+    btn.disabled = true;
+    try {
+      if (!state.driveReady) await ensureDrive(false);
+    } catch (ex) {
+      err.textContent = tr("googleError");
+      btn.disabled = false;
+      return;
+    }
     const user = state.data.users.find(
       (u) => u.username === String(fd.get("username")).trim() && u.password === String(fd.get("password"))
     );
     if (!user) {
-      box.querySelector(".error").textContent = tr("badLogin");
+      err.textContent = tr("badLogin");
+      btn.disabled = false;
       return;
     }
     state.session = { userId: user.id };
@@ -796,7 +762,8 @@ function shellView(user) {
 function projectsView() {
   const box = el(`<div>
     <h2>${tr("summary")}</h2>
-    <p class="hint">${tr("storageHint")}<br><b>${storagePlace()}</b></p>
+    <p class="hint">${tr("storageHint")}</p>
+    <p class="muted">${tr("installHint")}</p>
     ${!isPm() ? `<p class="readonly-note">${tr("onlyPm")}</p>` : ""}
     <div class="row no-print" style="margin:12px 0">
       ${isPm() ? `<button class="btn" data-add>${tr("addProject")}</button>
@@ -843,6 +810,9 @@ function projectsView() {
     if (copyBtn) copyBtn.onclick = () => copyProject(p);
     tbody.append(trRow);
   });
+  if (!state.data.projects.length) {
+    tbody.append(el(`<tr><td colspan="9" class="muted">${tr("noProjects")}</td></tr>`));
+  }
   const add = box.querySelector("[data-add]");
   if (add) add.onclick = () => openProjectForm();
   const exp = box.querySelector("[data-export]");
@@ -1622,12 +1592,16 @@ function openUserForm(user) {
       return false;
     }
     const pass = String(fd.get("password") || "");
+    if (pass && isWeakPassword(pass)) {
+      modal.querySelector(".error").textContent = tr("weakPassword");
+      return false;
+    }
     if (user) {
       Object.assign(user, payload);
       if (pass) user.password = pass;
     } else {
-      if (!pass) {
-        modal.querySelector(".error").textContent = tr("required");
+      if (!pass || isWeakPassword(pass)) {
+        modal.querySelector(".error").textContent = pass ? tr("weakPassword") : tr("required");
         return false;
       }
       state.data.users.push({ id: uid(), password: pass, ...payload });
@@ -1645,19 +1619,30 @@ function profileView() {
       <p class="muted">${tr("currentUser")}: ${esc(u.username)} · ${esc(roleLabel(u))}</p>
       <label>${tr("displayName")}<input name="name" value="${esc(u.name)}" ${isPm() ? "" : "disabled"}></label>
       <label>${tr("email")}<input name="email" type="email" value="${esc(u.email || "")}" ${isPm() ? "" : "disabled"}></label>
-      ${isPm() ? `<label>${tr("username")}<input name="username" value="${esc(u.username)}"></label>
-      <label>${tr("changePassword")}<input name="password" type="password"></label>
+      ${isPm() ? `<label>${tr("username")}<input name="username" value="${esc(u.username)}"></label>` : `<p>${tr("username")}: <b>${esc(u.username)}</b></p>`}
+      <label>${tr("changePassword")}<input name="password" type="password" minlength="8"></label>
+      ${!isPm() ? `<p class="readonly-note">${tr("onlyPm")}</p>` : ""}
       <p class="error"></p>
-      <button class="btn" type="submit">${tr("save")}</button>` : `<p>${tr("username")}: <b>${esc(u.username)}</b></p><p class="readonly-note">${tr("onlyPm")}</p>`}
+      <button class="btn" type="submit">${tr("save")}</button>
     </form>
   </div>`);
   box.querySelector("form").onsubmit = (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    u.name = fd.get("name");
-    u.email = fd.get("email");
-    if (isPm() && fd.get("username")) u.username = String(fd.get("username")).trim();
-    if (fd.get("password")) u.password = String(fd.get("password"));
+    const err = box.querySelector(".error");
+    const pass = String(fd.get("password") || "");
+    if (isPm()) {
+      u.name = fd.get("name");
+      u.email = fd.get("email");
+      if (fd.get("username")) u.username = String(fd.get("username")).trim();
+    }
+    if (pass) {
+      if (isWeakPassword(pass)) {
+        err.textContent = tr("weakPassword");
+        return;
+      }
+      u.password = pass;
+    }
     save(state.data);
     render();
   };
