@@ -64,6 +64,18 @@ const I18N = {
     costReport: "تقرير الكلف",
     timeReport: "تقرير الزمن",
     print: "طباعة التقرير",
+    printSize: "حجم الطباعة",
+    printAuto: "عادي (حسب الصفحات)",
+    printPages1: "صفحة واحدة",
+    printPages2: "صفحتان",
+    printPages3: "3 صفحات",
+    printPages4: "4 صفحات",
+    deviceScope: "قسم الجهاز",
+    allDevices: "كل الأجهزة",
+    addDevice: "إضافة نوع جهاز",
+    devices: "أنواع الأجهزة",
+    deviceNameAr: "الاسم بالعربي",
+    deviceNameEn: "الاسم بالإنجليزي",
     allProjects: "كل المشاريع",
     projectReport: "تقرير المشروع",
     role: "الدور",
@@ -184,6 +196,18 @@ const I18N = {
     costReport: "Cost report",
     timeReport: "Time report",
     print: "Print report",
+    printSize: "Print size",
+    printAuto: "Normal (as many pages as needed)",
+    printPages1: "One page",
+    printPages2: "Two pages",
+    printPages3: "3 pages",
+    printPages4: "4 pages",
+    deviceScope: "Device department",
+    allDevices: "All devices",
+    addDevice: "Add device type",
+    devices: "Device types",
+    deviceNameAr: "Arabic name",
+    deviceNameEn: "English name",
     allProjects: "All projects",
     projectReport: "Project report",
     role: "Role",
@@ -388,17 +412,33 @@ function cloneTask(task) {
   };
 }
 
+function defaultDevices() {
+  return [
+    { id: "mri", ar: "رنين مغناطيسي", en: "MRI" },
+    { id: "ct", ar: "مفراس", en: "CT scanner" },
+    { id: "cath", ar: "قسطرة", en: "Cath lab" },
+    { id: "other", ar: "أخرى", en: "Other" }
+  ];
+}
+
 function seed() {
   return {
+    devices: defaultDevices(),
     users: [
-      { id: "u1", username: "manager", password: "manager123", role: "pm", roleTitle: "", name: "مدير المشاريع", email: "picassomega86@gmail.com" },
-      { id: "u2", username: "viewer", password: "viewer123", role: "other", roleTitle: "مراقب ميداني", name: "مراقب ميداني", email: "" }
+      { id: "u1", username: "manager", password: "manager123", role: "pm", deviceScope: "all", roleTitle: "", name: "مدير المشاريع", email: "picassomega86@gmail.com" },
+      { id: "u2", username: "viewer", password: "viewer123", role: "other", deviceScope: "all", roleTitle: "مراقب ميداني", name: "مراقب ميداني", email: "" }
     ],
     projects: []
   };
 }
 
 function migrate(data) {
+  if (!Array.isArray(data.devices) || !data.devices.length) data.devices = defaultDevices();
+  else {
+    defaultDevices().forEach((d) => {
+      if (!data.devices.some((x) => x.id === d.id)) data.devices.push(d);
+    });
+  }
   (data.users || []).forEach((u) => {
     if (u.role === "viewer") {
       u.role = "other";
@@ -406,6 +446,7 @@ function migrate(data) {
     }
     if (u.role !== "pm") u.role = "other";
     if (u.roleTitle == null) u.roleTitle = "";
+    if (!u.deviceScope) u.deviceScope = u.role === "pm" ? "all" : "all";
   });
   (data.projects || []).forEach((p) => {
     if (!p.files) p.files = [];
@@ -495,6 +536,7 @@ const state = {
   reportProjectId: "all",
   reportShowSubs: true,
   reportShowGantt: false,
+  printFit: "auto",
   modal: null,
   expanded: {},
   driveReady: false,
@@ -532,10 +574,34 @@ function isPm() {
   return currentUser()?.role === "pm";
 }
 
+function isCompanyPm() {
+  const u = currentUser();
+  return u?.role === "pm" && (!u.deviceScope || u.deviceScope === "all");
+}
+
+function deviceLabel(id) {
+  const d = (state.data.devices || []).find((x) => x.id === id);
+  if (d) return state.lang === "ar" ? d.ar : d.en;
+  return tr(id) || id || "";
+}
+
+function visibleProjects() {
+  const u = currentUser();
+  const list = state.data.projects || [];
+  if (!u || !u.deviceScope || u.deviceScope === "all") return list;
+  return list.filter((p) => p.device === u.deviceScope);
+}
+
+function canOpenProject(project) {
+  if (!project) return false;
+  return visibleProjects().some((p) => p.id === project.id);
+}
+
 function roleLabel(user) {
   if (!user) return "";
-  if (user.role === "pm") return tr("pm");
-  return user.roleTitle || tr("otherRole");
+  const scope = !user.deviceScope || user.deviceScope === "all" ? tr("allDevices") : deviceLabel(user.deviceScope);
+  if (user.role === "pm") return `${tr("pm")} · ${scope}`;
+  return `${user.roleTitle || tr("otherRole")} · ${scope}`;
 }
 
 function persistSession() {
@@ -724,7 +790,7 @@ function shellView(user) {
       <nav class="nav">
         <button class="btn secondary" data-go="projects">${tr("projects")}</button>
         <button class="btn secondary" data-go="reports">${tr("reports")}</button>
-        ${isPm() ? `<button class="btn secondary" data-go="users">${tr("users")}</button>` : ""}
+        ${isCompanyPm() ? `<button class="btn secondary" data-go="users">${tr("users")}</button>` : ""}
         <button class="btn secondary" data-go="profile">${tr("profile")}</button>
         <button class="btn ghost" data-lang>${tr("lang")}</button>
         <button class="btn ghost" data-out>${tr("logout")}</button>
@@ -761,12 +827,9 @@ function shellView(user) {
 function projectsView() {
   const box = el(`<div>
     <h2>${tr("summary")}</h2>
-    <p class="hint">${tr("storageHint")}</p>
-    <p class="muted">${tr("installHint")}</p>
-    ${!isPm() ? `<p class="readonly-note">${tr("onlyPm")}</p>` : ""}
     <div class="row no-print" style="margin:12px 0">
-      ${isPm() ? `<button class="btn" data-add>${tr("addProject")}</button>
-      <button class="btn secondary" data-export>${tr("exportData")}</button>
+      ${isPm() ? `<button class="btn" data-add>${tr("addProject")}</button>` : ""}
+      ${isCompanyPm() ? `<button class="btn secondary" data-export>${tr("exportData")}</button>
       <label class="btn secondary file-btn">${tr("importData")}<input type="file" accept="application/json,.json" hidden data-import></label>` : ""}
     </div>
     <div class="card" style="padding:8px 16px; overflow:auto">
@@ -781,10 +844,11 @@ function projectsView() {
     </div>
   </div>`);
   const tbody = box.querySelector("tbody");
-  state.data.projects.forEach((p) => {
+  const list = visibleProjects();
+  list.forEach((p) => {
     const s = projectStats(p);
     const trRow = el(`<tr>
-      <td>${esc(p.name)}</td><td>${esc(p.hospital)}</td><td>${tr(p.device)}</td>
+      <td>${esc(p.name)}</td><td>${esc(p.hospital)}</td><td>${esc(deviceLabel(p.device))}</td>
       <td>
         <div class="progress-wrap">
           <div class="progress-track" title="${s.progress}%"><span class="progress-fill" style="width:${s.progress}%"></span></div>
@@ -809,7 +873,7 @@ function projectsView() {
     if (copyBtn) copyBtn.onclick = () => copyProject(p);
     tbody.append(trRow);
   });
-  if (!state.data.projects.length) {
+  if (!list.length) {
     tbody.append(el(`<tr><td colspan="9" class="muted">${tr("noProjects")}</td></tr>`));
   }
   const add = box.querySelector("[data-add]");
@@ -853,14 +917,14 @@ function flatRows(tasks, parent) {
 
 function projectView() {
   const project = state.data.projects.find((p) => p.id === state.projectId);
-  if (!project) return el(`<p>${tr("projects")}</p>`);
+  if (!project || !canOpenProject(project)) return el(`<p>${tr("projects")}</p>`);
   rollupProject(project);
   const s = projectStats(project);
   const box = el(`<div>
     <div class="row" style="justify-content:space-between">
       <div>
         <h2>${esc(project.name)}</h2>
-        <div class="muted">${esc(project.hospital)} · ${tr(project.device)}</div>
+        <div class="muted">${esc(project.hospital)} · ${esc(deviceLabel(project.device))}</div>
       </div>
       <div class="row no-print">
         <button class="btn secondary" data-rep>${tr("projectReport")}</button>
@@ -1247,36 +1311,41 @@ function moveInList(list, index, dir) {
   render();
 }
 
+function deviceOptions(selected) {
+  return (state.data.devices || [])
+    .map((d) => `<option value="${esc(d.id)}" ${selected === d.id ? "selected" : ""}>${esc(deviceLabel(d.id))}</option>`)
+    .join("");
+}
+
 function openProjectForm(project) {
-  const p = project || { name: "", hospital: "", device: "mri" };
+  const u = currentUser();
+  const locked = isPm() && u.deviceScope && u.deviceScope !== "all";
+  const p = project || { name: "", hospital: "", device: locked ? u.deviceScope : ((state.data.devices || [])[0] || {}).id || "mri" };
   showForm(`
     <h3>${project ? tr("editProject") : tr("addProject")}</h3>
     <label>${tr("projectName")}<input name="name" value="${esc(p.name)}" required></label>
     <label>${tr("hospital")}<input name="hospital" value="${esc(p.hospital)}" required></label>
-    <label>${tr("device")}<select name="device">
-      <option value="mri">${tr("mri")}</option>
-      <option value="ct">${tr("ct")}</option>
-      <option value="cath">${tr("cath")}</option>
-      <option value="other">${tr("other")}</option>
-    </select></label>
+    ${locked
+      ? `<p>${tr("device")}: <b>${esc(deviceLabel(p.device))}</b></p><input type="hidden" name="device" value="${esc(p.device)}">`
+      : `<label>${tr("device")}<select name="device">${deviceOptions(p.device)}</select></label>`}
   `, (fd) => {
+    const device = String(fd.get("device") || p.device);
     if (project) {
       project.name = fd.get("name");
       project.hospital = fd.get("hospital");
-      project.device = fd.get("device");
+      project.device = device;
     } else {
       state.data.projects.push({
         id: uid(),
         name: fd.get("name"),
         hospital: fd.get("hospital"),
-        device: fd.get("device"),
+        device: device,
         files: [],
         tasks: []
       });
     }
     save(state.data);
   });
-  document.querySelector('select[name="device"]').value = p.device;
 }
 
 function openTaskForm(project, taskItem, parent) {
@@ -1453,15 +1522,38 @@ function reportTable(projects, withTasks, showSubs) {
   return `<table class="report-table">${head}<tbody>${body}</tbody></table>`;
 }
 
+function printReport() {
+  const pages = state.printFit;
+  const root = document.documentElement;
+  const reset = () => root.style.setProperty("--print-zoom", "1");
+  reset();
+  if (!pages || pages === "auto") {
+    window.print();
+    return;
+  }
+  const report = document.querySelector(".report-page") || document.querySelector(".page");
+  const pageH = 980;
+  const h = Math.max(report ? report.scrollHeight : 1, 1);
+  const zoom = Math.min(1, Math.max(0.4, (Number(pages) * pageH) / h));
+  root.style.setProperty("--print-zoom", String(zoom));
+  const done = () => {
+    reset();
+    window.removeEventListener("afterprint", done);
+  };
+  window.addEventListener("afterprint", done);
+  window.print();
+}
+
 function reportsView() {
   const selected = state.reportProjectId || "all";
+  const projects = visibleProjects();
   const options = [`<option value="all">${tr("allProjects")}</option>`]
-    .concat(state.data.projects.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`))
+    .concat(projects.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`))
     .join("");
   const list =
     selected === "all"
-      ? state.data.projects
-      : state.data.projects.filter((p) => p.id === selected);
+      ? projects
+      : projects.filter((p) => p.id === selected);
   const single = selected !== "all" && list[0];
   if (single && state.reportShowGantt) {
     list[0].tasks.forEach((t) => {
@@ -1477,21 +1569,35 @@ function reportsView() {
         </label>
         ${single ? `<label class="chk"><input type="checkbox" data-subs ${state.reportShowSubs ? "checked" : ""}> ${tr("showSubtasks")}</label>
         <label class="chk"><input type="checkbox" data-gantt ${state.reportShowGantt ? "checked" : ""}> ${tr("showGantt")}</label>` : ""}
+        <label style="margin:0">${tr("printSize")}
+          <select data-printfit>
+            <option value="auto">${tr("printAuto")}</option>
+            <option value="1">${tr("printPages1")}</option>
+            <option value="2">${tr("printPages2")}</option>
+            <option value="3">${tr("printPages3")}</option>
+            <option value="4">${tr("printPages4")}</option>
+          </select>
+        </label>
         <button class="btn" type="button" data-print>${tr("print")}</button>
       </div>
     </div>
     ${single ? `<h1 class="report-title">${esc(list[0].name)}</h1>
-      <p class="muted">${esc(list[0].hospital)} · ${tr(list[0].device)}</p>` : `<h1 class="report-title">${tr("allProjects")}</h1>`}
+      <p class="muted">${esc(list[0].hospital)} · ${esc(deviceLabel(list[0].device))}</p>` : `<h1 class="report-title">${tr("allProjects")}</h1>`}
     <div class="card" style="padding:8px 16px; overflow:auto; margin-top:16px">
       ${reportTable(list, !!single, state.reportShowSubs)}
     </div>
     ${single && state.reportShowGantt ? `<h3>${tr("gantt")}</h3><div class="card gantt-wrap report-gantt">${ganttHtml(list[0])}</div>` : ""}
   </div>`);
-  const sel = box.querySelector("select");
-  sel.value = selected;
+  const sel = box.querySelector("select[name=which]");
+  sel.value = projects.some((p) => p.id === selected) ? selected : "all";
   sel.onchange = () => {
     state.reportProjectId = sel.value;
     render();
+  };
+  const fit = box.querySelector("[data-printfit]");
+  fit.value = state.printFit || "auto";
+  fit.onchange = () => {
+    state.printFit = fit.value;
   };
   const subs = box.querySelector("[data-subs]");
   if (subs) subs.onchange = () => {
@@ -1503,13 +1609,13 @@ function reportsView() {
     state.reportShowGantt = gantt.checked;
     render();
   };
-  box.querySelector("[data-print]").onclick = () => window.print();
+  box.querySelector("[data-print]").onclick = () => printReport();
   bindGanttScroll(box);
   return box;
 }
 
 function usersView() {
-  if (!isPm()) return el(`<p class="readonly-note">${tr("onlyPm")}</p>`);
+  if (!isCompanyPm()) return el(`<p class="readonly-note">${tr("onlyPm")}</p>`);
   const box = el(`<div>
     <div class="row" style="justify-content:space-between">
       <h2>${tr("users")}</h2>
@@ -1517,18 +1623,29 @@ function usersView() {
     </div>
     <div class="card" style="padding:8px 16px; margin-top:12px; overflow:auto">
       <table>
-        <thead><tr><th>${tr("username")}</th><th>${tr("displayName")}</th><th>${tr("email")}</th><th>${tr("role")}</th><th></th></tr></thead>
+        <thead><tr><th>${tr("username")}</th><th>${tr("displayName")}</th><th>${tr("role")}</th><th>${tr("deviceScope")}</th><th></th></tr></thead>
         <tbody></tbody>
+      </table>
+    </div>
+    <div class="row" style="justify-content:space-between; margin-top:22px">
+      <h2>${tr("devices")}</h2>
+      <button class="btn secondary" data-adddev>${tr("addDevice")}</button>
+    </div>
+    <div class="card" style="padding:8px 16px; margin-top:12px; overflow:auto">
+      <table>
+        <thead><tr><th>${tr("deviceNameAr")}</th><th>${tr("deviceNameEn")}</th><th></th></tr></thead>
+        <tbody data-devs></tbody>
       </table>
     </div>
   </div>`);
   const tbody = box.querySelector("tbody");
   state.data.users.forEach((u) => {
     const row = el(`<tr>
-      <td>${esc(u.username)}</td><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(roleLabel(u))}</td>
+      <td>${esc(u.username)}</td><td>${esc(u.name)}</td><td>${esc(u.role === "pm" ? tr("pm") : (u.roleTitle || tr("otherRole")))}</td>
+      <td>${esc(!u.deviceScope || u.deviceScope === "all" ? tr("allDevices") : deviceLabel(u.deviceScope))}</td>
       <td class="row">
         <button class="btn small" data-ed>${tr("edit")}</button>
-        ${u.role !== "pm" ? `<button class="btn small danger" data-del>${tr("delete")}</button>` : ""}
+        ${u.role !== "pm" || u.deviceScope !== "all" ? `<button class="btn small danger" data-del>${tr("delete")}</button>` : ""}
       </td>
     </tr>`);
     row.querySelector("[data-ed]").onclick = () => openUserForm(u);
@@ -1540,12 +1657,30 @@ function usersView() {
     };
     tbody.append(row);
   });
+  const devs = box.querySelector("[data-devs]");
+  (state.data.devices || []).forEach((d) => {
+    const row = el(`<tr>
+      <td>${esc(d.ar)}</td><td>${esc(d.en)}</td>
+      <td>${["mri", "ct", "cath", "other"].includes(d.id) ? "" : `<button class="btn small danger" data-deldev>${tr("delete")}</button>`}</td>
+    </tr>`);
+    const deld = row.querySelector("[data-deldev]");
+    if (deld) deld.onclick = () => {
+      state.data.devices = state.data.devices.filter((x) => x.id !== d.id);
+      save(state.data);
+      render();
+    };
+    devs.append(row);
+  });
   box.querySelector("[data-add]").onclick = () => openUserForm(null);
+  box.querySelector("[data-adddev]").onclick = () => openDeviceForm();
   return box;
 }
 
 function openUserForm(user) {
-  const u = user || { username: "", name: "", email: "", role: "other", roleTitle: "", password: "" };
+  const u = user || { username: "", name: "", email: "", role: "other", roleTitle: "", password: "", deviceScope: "all" };
+  const scopeOpts = [`<option value="all">${tr("allDevices")}</option>`]
+    .concat((state.data.devices || []).map((d) => `<option value="${esc(d.id)}">${esc(deviceLabel(d.id))}</option>`))
+    .join("");
   showForm(`
     <h3>${user ? tr("edit") : tr("addUser")}</h3>
     <div class="grid-2">
@@ -1557,6 +1692,7 @@ function openUserForm(user) {
         <option value="other">${tr("otherRole")}</option>
       </select></label>
     </div>
+    <label>${tr("deviceScope")}<select name="deviceScope">${scopeOpts}</select></label>
     <label>${tr("roleTitle")}<input name="roleTitle" value="${esc(u.roleTitle || "")}" placeholder="${esc(tr("roleTitleHint"))}"></label>
     <label>${tr("newPassword")}<input name="password" type="password" placeholder="${user ? "••••••" : ""}"></label>
   `, (fd, modal) => {
@@ -1565,6 +1701,7 @@ function openUserForm(user) {
       name: fd.get("name"),
       email: fd.get("email"),
       role: fd.get("role"),
+      deviceScope: String(fd.get("deviceScope") || "all"),
       roleTitle: fd.get("role") === "pm" ? "" : String(fd.get("roleTitle") || "").trim()
     };
     if (payload.role === "other" && !payload.roleTitle) {
@@ -1589,6 +1726,26 @@ function openUserForm(user) {
     save(state.data);
   });
   document.querySelector('select[name="role"]').value = u.role === "pm" ? "pm" : "other";
+  document.querySelector('select[name="deviceScope"]').value = u.deviceScope || "all";
+}
+
+function openDeviceForm() {
+  showForm(`
+    <h3>${tr("addDevice")}</h3>
+    <label>${tr("deviceNameAr")}<input name="ar" required></label>
+    <label>${tr("deviceNameEn")}<input name="en" required></label>
+  `, (fd) => {
+    const ar = String(fd.get("ar") || "").trim();
+    const en = String(fd.get("en") || "").trim();
+    if (!ar || !en) return false;
+    const id = en.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || uid();
+    if ((state.data.devices || []).some((d) => d.id === id)) {
+      state.data.devices.push({ id: id + "-" + uid(), ar, en });
+    } else {
+      state.data.devices.push({ id, ar, en });
+    }
+    save(state.data);
+  });
 }
 
 function profileView() {

@@ -320,6 +320,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 [dir="rtl"] th, [dir="rtl"] td { text-align: right; }
 
 @media print {
+  html { zoom: var(--print-zoom, 1); }
   .topbar, .no-print { display: none !important; }
   .page { padding: 0; max-width: none; }
   .card { box-shadow: none; }
