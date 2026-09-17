@@ -109,7 +109,7 @@ const I18N = {
     importBad: "ملف النسخة الاحتياطية غير صالح.",
     googleConnect: "ربط تخزين الشركة",
     googleNeedConfig: "ضع GOOGLE_CLIENT_ID في ملف .env ثم حدّث الصفحة.",
-    googleConnecting: "جاري الاتصال بجوجل درايف…",
+    googleConnecting: "جاري الدخول…",
     googleLoading: "جاري قراءة project_data.json من درايف…",
     googleSaving: "جاري الحفظ على درايف…",
     googleSaved: "محفوظ على درايف",
@@ -228,7 +228,7 @@ const I18N = {
     importBad: "Backup file is not valid.",
     googleConnect: "Connect company storage",
     googleNeedConfig: "Put GOOGLE_CLIENT_ID in the .env file, then refresh.",
-    googleConnecting: "Connecting to Google Drive…",
+    googleConnecting: "Signing in…",
     googleLoading: "Reading project_data.json from Drive…",
     googleSaving: "Saving to Drive…",
     googleSaved: "Saved to Drive",
@@ -686,10 +686,7 @@ function loginView() {
     const fd = new FormData(e.target);
     const err = box.querySelector(".error");
     const btn = box.querySelector("[type=submit]");
-    err.textContent = "";
-    btn.disabled = true;
-    try {
-      if (!state.driveReady) await ensureDrive(false);
+    err.textContent = tr("googleConnecting");
     } catch (ex) {
       err.textContent = tr("googleError");
       btn.disabled = false;
