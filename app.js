@@ -687,6 +687,9 @@ function loginView() {
     const err = box.querySelector(".error");
     const btn = box.querySelector("[type=submit]");
     err.textContent = tr("googleConnecting");
+    btn.disabled = true;
+    try {
+      if (!state.driveReady) await ensureDrive(false);
     } catch (ex) {
       err.textContent = tr("googleError");
       btn.disabled = false;
