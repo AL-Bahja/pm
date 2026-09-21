@@ -916,7 +916,7 @@ function shellView(user) {
         <div class="logo">PM</div>
         <div>
           <strong>${tr("app")}</strong>
-          <div class="muted">${tr("welcome")} ${esc(user.name)} · ${esc(roleLabel(user))}</div>
+          <div class="muted">${tr("welcome")} ${esc(user.name)}</div>
         </div>
       </div>
       <nav class="nav">
@@ -960,13 +960,13 @@ function shellView(user) {
 function projectsView() {
   const box = el(`<div>
     <h2>${tr("summary")}</h2>
-    <div class="row no-print" style="margin:12px 0">
+    <div class="row no-print toolbar-row" style="margin:12px 0">
       ${isPm() ? `<button class="btn" data-add>${tr("addProject")}</button>` : ""}
       ${isCompanyPm() ? `<button class="btn secondary" data-export>${tr("exportData")}</button>
       <label class="btn secondary file-btn">${tr("importData")}<input type="file" accept="application/json,.json" hidden data-import></label>` : ""}
     </div>
-    <div class="card" style="padding:8px 16px; overflow:auto">
-      <table>
+    <div class="card table-scroll" style="padding:8px 16px">
+      <table class="stack-table">
         <thead><tr>
           <th>${tr("projectName")}</th><th>${tr("hospital")}</th><th>${tr("location")}</th>
           <th>${tr("progress")}</th><th>${tr("plannedCost")}</th><th>${tr("actualCost")}</th>
@@ -981,18 +981,20 @@ function projectsView() {
   list.forEach((p) => {
     const s = projectStats(p);
     const trRow = el(`<tr>
-      <td>${esc(p.name)}</td><td>${esc(p.hospital)}</td><td>${esc(p.location || "")}</td>
-      <td>
+      <td data-label="${esc(tr("projectName"))}">${esc(p.name)}</td>
+      <td data-label="${esc(tr("hospital"))}">${esc(p.hospital)}</td>
+      <td data-label="${esc(tr("location"))}">${esc(p.location || "")}</td>
+      <td data-label="${esc(tr("progress"))}">
         <div class="progress-wrap">
           <div class="progress-track" title="${s.progress}%"><span class="progress-fill" style="width:${s.progress}%"></span></div>
           <span class="progress-pct">${s.progress}%</span>
         </div>
       </td>
-      <td>${money(s.plannedCost)} ${tr("currency")}</td>
-      <td>${money(s.actualCost)} ${tr("currency")}</td>
-      <td>${s.plannedDays} ${tr("days")}</td>
-      <td>${s.actualDays} ${tr("days")}</td>
-      <td class="row">
+      <td data-label="${esc(tr("plannedCost"))}">${money(s.plannedCost)} ${tr("currency")}</td>
+      <td data-label="${esc(tr("actualCost"))}">${money(s.actualCost)} ${tr("currency")}</td>
+      <td data-label="${esc(tr("plannedDays"))}">${s.plannedDays} ${tr("days")}</td>
+      <td data-label="${esc(tr("actualDays"))}">${s.actualDays} ${tr("days")}</td>
+      <td class="row actions">
         <button class="btn small secondary" data-open>${tr("open")}</button>
         ${isPm() ? `<button class="btn small" data-copy>${tr("copyProject")}</button>` : ""}
       </td>
@@ -1007,7 +1009,7 @@ function projectsView() {
     tbody.append(trRow);
   });
   if (!list.length) {
-    tbody.append(el(`<tr><td colspan="9" class="muted">${tr("noProjects")}</td></tr>`));
+    tbody.append(el(`<tr class="empty-row"><td colspan="9" class="muted">${tr("noProjects")}</td></tr>`));
   }
   const add = box.querySelector("[data-add]");
   if (add) add.onclick = () => openProjectForm();
@@ -1056,7 +1058,7 @@ function projectView() {
   rollupProject(project);
   const s = projectStats(project);
   const box = el(`<div>
-    <div class="row" style="justify-content:space-between">
+    <div class="project-head">
       <div>
         <h2>${esc(project.name)}</h2>
       </div>
@@ -1082,8 +1084,8 @@ function projectView() {
       <h3>${tr("tasks")}</h3>
       ${isPm() ? `<button class="btn" data-addt>${tr("addTask")}</button>` : ""}
     </div>
-    <div class="card" style="padding:8px 16px; overflow:auto">
-      <table>
+    <div class="card table-scroll" style="padding:8px 16px">
+      <table class="stack-table">
         <thead><tr>
           <th>#</th><th>${tr("taskName")}</th><th>${tr("status")}</th>
           <th>${tr("plannedStart")} / ${tr("plannedEnd")}</th>
@@ -1139,15 +1141,15 @@ function taskRow(project, taskItem, parent, index, label, isSub, expanded, isLas
   const count = kids && !expanded ? `<span class="sub-count">${taskItem.children.length}</span>` : "";
   const filesN = (taskItem.costFiles || []).length;
   const row = el(`<tr class="${parent ? "child-row" : "parent-row"}">
-    <td>${label}</td>
-    <td class="${isSub ? "task-indent" : ""}"><span class="task-name-cell">${twist}<span>${esc(taskItem.name)}</span>${count}</span></td>
-    <td><span class="badge ${taskItem.status}">${tr(taskItem.status)}</span></td>
-    <td>${fmtDate(taskItem.plannedStart)} → ${fmtDate(taskItem.plannedEnd)}</td>
-    <td>${fmtDate(taskItem.actualStart)} → ${fmtDate(taskItem.actualEnd)}</td>
-    <td>${money(taskItem.plannedCost)}</td>
-    <td>${money(taskItem.actualCost)}</td>
-    <td>${filesN ? filesN : "—"}</td>
-    ${isPm() ? `<td class="row">
+    <td data-label="#"> ${label}</td>
+    <td data-label="${esc(tr("taskName"))}" class="${isSub ? "task-indent" : ""}"><span class="task-name-cell">${twist}<span>${esc(taskItem.name)}</span>${count}</span></td>
+    <td data-label="${esc(tr("status"))}"><span class="badge ${taskItem.status}">${tr(taskItem.status)}</span></td>
+    <td data-label="${esc(tr("planned"))}">${fmtDate(taskItem.plannedStart)} → ${fmtDate(taskItem.plannedEnd)}</td>
+    <td data-label="${esc(tr("actual"))}">${fmtDate(taskItem.actualStart)} → ${fmtDate(taskItem.actualEnd)}</td>
+    <td data-label="${esc(tr("plannedCost"))}">${money(taskItem.plannedCost)}</td>
+    <td data-label="${esc(tr("actualCost"))}">${money(taskItem.actualCost)}</td>
+    <td data-label="${esc(tr("attachments"))}">${filesN ? filesN : "—"}</td>
+    ${isPm() ? `<td class="row actions">
       <button class="btn small secondary" data-up>${tr("up")}</button>
       <button class="btn small secondary" data-down>${tr("down")}</button>
       ${!isSub ? `<button class="btn small secondary" data-sub>${tr("addSubtask")}</button>` : ""}
@@ -1798,9 +1800,9 @@ function reportsView() {
     });
   }
   const box = el(`<div class="report-page">
-    <div class="row no-print" style="justify-content:space-between">
+    <div class="row no-print report-toolbar-wrap" style="justify-content:space-between">
       <h2>${tr("reports")}</h2>
-      <div class="row">
+      <div class="row report-toolbar">
         <label style="margin:0">${tr("chooseProject")}
           <select name="which">${options}</select>
         </label>
@@ -1820,7 +1822,7 @@ function reportsView() {
     </div>
     ${single ? `<h1 class="report-title">${esc(list[0].name)}</h1>
       <p class="muted">${esc(list[0].hospital || "")}${list[0].location ? " · " + esc(list[0].location) : ""}</p>` : `<h1 class="report-title">${tr("allProjects")}</h1>`}
-    <div class="card" style="padding:8px 16px; overflow:auto; margin-top:16px">
+    <div class="card table-scroll" style="padding:8px 16px; margin-top:16px">
       ${reportTable(list, !!single, state.reportShowSubs)}
     </div>
     ${single && state.reportShowGantt ? `<h3>${tr("gantt")}</h3><div class="card gantt-wrap report-gantt">${ganttHtml(list[0])}</div>` : ""}
@@ -1858,8 +1860,8 @@ function usersView() {
       <h2>${tr("users")}</h2>
       <button class="btn" data-add>${tr("addUser")}</button>
     </div>
-    <div class="card" style="padding:8px 16px; margin-top:12px; overflow:auto">
-      <table>
+    <div class="card table-scroll" style="padding:8px 16px; margin-top:12px">
+      <table class="stack-table">
         <thead><tr><th>${tr("username")}</th><th>${tr("displayName")}</th><th>${tr("password")}</th><th>${tr("role")}</th><th>${tr("deviceScope")}</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
@@ -1868,8 +1870,8 @@ function usersView() {
       <h2>${tr("devices")}</h2>
       <button class="btn secondary" data-adddev>${tr("addDevice")}</button>
     </div>
-    <div class="card" style="padding:8px 16px; margin-top:12px; overflow:auto">
-      <table>
+    <div class="card table-scroll" style="padding:8px 16px; margin-top:12px">
+      <table class="stack-table">
         <thead><tr><th>${tr("deviceNameAr")}</th><th>${tr("deviceNameEn")}</th><th></th></tr></thead>
         <tbody data-devs></tbody>
       </table>
@@ -1878,9 +1880,12 @@ function usersView() {
   const tbody = box.querySelector("tbody");
   state.data.users.forEach((u) => {
     const row = el(`<tr>
-      <td>${esc(u.username)}</td><td>${esc(u.name)}</td><td>${esc(u.password || "")}</td><td>${esc(u.role === "pm" ? tr("pm") : (u.roleTitle || tr("otherRole")))}</td>
-      <td>${esc(!u.deviceScope || u.deviceScope === "all" ? tr("allDevices") : deviceLabel(u.deviceScope))}</td>
-      <td class="row">
+      <td data-label="${esc(tr("username"))}">${esc(u.username)}</td>
+      <td data-label="${esc(tr("displayName"))}">${esc(u.name)}</td>
+      <td data-label="${esc(tr("password"))}">${esc(u.password || "")}</td>
+      <td data-label="${esc(tr("role"))}">${esc(u.role === "pm" ? tr("pm") : (u.roleTitle || tr("otherRole")))}</td>
+      <td data-label="${esc(tr("deviceScope"))}">${esc(!u.deviceScope || u.deviceScope === "all" ? tr("allDevices") : deviceLabel(u.deviceScope))}</td>
+      <td class="row actions">
         <button class="btn small" data-ed>${tr("edit")}</button>
         ${u.role !== "pm" || u.deviceScope !== "all" ? `<button class="btn small danger" data-del>${tr("delete")}</button>` : ""}
       </td>
@@ -1897,8 +1902,9 @@ function usersView() {
   const devs = box.querySelector("[data-devs]");
   (state.data.devices || []).forEach((d) => {
     const row = el(`<tr>
-      <td>${esc(d.ar)}</td><td>${esc(d.en)}</td>
-      <td class="row">
+      <td data-label="${esc(tr("deviceNameAr"))}">${esc(d.ar)}</td>
+      <td data-label="${esc(tr("deviceNameEn"))}">${esc(d.en)}</td>
+      <td class="row actions">
         <button class="btn small" data-eddev>${tr("edit")}</button>
         <button class="btn small danger" data-deldev>${tr("delete")}</button>
       </td>
