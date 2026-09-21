@@ -58,10 +58,13 @@ const I18N = {
     gantt: "مخطط جانت",
     planned: "الجدول الحالي",
     actual: "فعلي",
-    baseline: "بيزلاين",
-    setBaseline: "حفظ البيزلاين",
-    baselineSaved: "تم حفظ البيزلاين من الجدول الحالي.",
-    milestone: "مايل ستون",
+    baseline: "خط الأساس",
+    setBaseline: "تحديث خط الأساس",
+    baselineSaved: "تم تحديث خط الأساس من الجدول الحالي.",
+    milestone: "حدث هام",
+    baseStart: "بداية خط الأساس",
+    baseEnd: "نهاية خط الأساس",
+    baselineHint: "عدّل تواريخ خط الأساس من داخل المهمة، أو اضغط «تحديث خط الأساس» لنسخ الجدول الحالي دفعة واحدة.",
     predecessors: "الاعتماديات (Predecessors)",
     predType: "النوع",
     lag: "التأخير/التقديم (أيام)",
@@ -134,15 +137,16 @@ const I18N = {
     loginTitle: "دخول النظام",
     changePassword: "تغيير كلمة المرور",
     currentUser: "الحساب الحالي",
-    rolledUp: "تُحسب الكلفة والجدول تلقائياً من المهام المتفرعة.",
+    rolledUp: "تُحسب الكلفة والجدول المتوقع لهذه المهمة من المهام الفرعية. لتغيير التاريخ المتوقع عدّل المهمة الفرعية.",
     subtaskOf: "متفرعة من",
     leaves: "مهام",
     reportFor: "تقرير",
     chooseProject: "اختر مشروعاً",
     dateHint: "اليوم/الشهر/السنة",
     dateInvalid: "التاريخ يجب أن يكون بالصيغة dd/mm/yyyy",
-    costFiles: "مرفقات الكلفة (وصولات)",
+    costFiles: "الكلف والمصاريف",
     projectFiles: "مرفقات المشروع",
+    projectDocs: "وثائق المشروع",
     upload: "تحميل ملف",
     download: "تنزيل",
     noFiles: "لا توجد ملفات",
@@ -166,7 +170,7 @@ const I18N = {
     googleHint: "من أي حاسبة: اربط جوجل درايف بحساب الشركة picassomega86@gmail.com (هذا التخزين المشترك). بعد ذلك يظهر دخول النظام: مدير المشاريع أو مستخدم آخر.",
     googleWrongAccount: "يفضّل استخدام حساب درايف الشركة:",
     driveFolder: "مجلد التطبيق",
-    ganttSwipe: "على الهاتف: اسحب الجدول يميناً ويساراً للتواريخ. المعين = مايل ستون، الأحمر = مسار حرج، الخطوط = اعتماديات."
+    ganttSwipe: "على الهاتف: اسحب الجدول للتواريخ. المعين = حدث هام، الأحمر = مسار حرج، الرمادي = خط الأساس."
   },
   en: {
     app: "Al-Bahja Company Project Management",
@@ -228,9 +232,12 @@ const I18N = {
     planned: "Current plan",
     actual: "Actual",
     baseline: "Baseline",
-    setBaseline: "Save baseline",
-    baselineSaved: "Baseline saved from the current plan.",
-    milestone: "Milestone",
+    setBaseline: "Update baseline",
+    baselineSaved: "Baseline updated from the current plan.",
+    milestone: "Key event",
+    baseStart: "Baseline start",
+    baseEnd: "Baseline end",
+    baselineHint: "Edit baseline dates inside the task, or tap Update baseline to copy the current plan.",
     predecessors: "Predecessors",
     predType: "Type",
     lag: "Lag / lead (days)",
@@ -303,15 +310,16 @@ const I18N = {
     loginTitle: "System login",
     changePassword: "Change password",
     currentUser: "Current account",
-    rolledUp: "Cost and schedule are calculated from subtasks.",
+    rolledUp: "Cost and expected dates for this task come from its subtasks. Edit the subtask to change the expected date.",
     subtaskOf: "Subtask of",
     leaves: "tasks",
     reportFor: "Report",
     chooseProject: "Choose a project",
     dateHint: "dd/mm/yyyy",
     dateInvalid: "Date must be dd/mm/yyyy",
-    costFiles: "Cost attachments (receipts)",
+    costFiles: "Costs and expenses",
     projectFiles: "Project attachments",
+    projectDocs: "Project documents",
     upload: "Upload file",
     download: "Download",
     noFiles: "No files",
@@ -335,7 +343,7 @@ const I18N = {
     googleHint: "On any PC, connect Google Drive with the company account picassomega86@gmail.com (shared storage). Then sign in as project manager or another user.",
     googleWrongAccount: "Prefer the company Drive account:",
     driveFolder: "App folder",
-    ganttSwipe: "On phone: swipe for dates. Diamond = milestone, red = critical path, lines = dependencies."
+    ganttSwipe: "On phone: swipe for dates. Diamond = key event, red = critical path, gray = baseline."
   }
 };
 
@@ -412,10 +420,10 @@ function rollupTask(task) {
   if (!hasChildren(task)) return task;
   task.plannedCost = task.children.reduce((s, c) => s + Number(c.plannedCost || 0), 0);
   task.actualCost = task.children.reduce((s, c) => s + Number(c.actualCost || 0), 0);
-  task.plannedStart = minDate(task.children.map((c) => c.plannedStart));
-  task.plannedEnd = maxDate(task.children.map((c) => c.plannedEnd));
-  task.actualStart = minDate(task.children.map((c) => c.actualStart));
-  task.actualEnd = maxDate(task.children.map((c) => c.actualEnd));
+  if (!task.plannedStart) task.plannedStart = minDate(task.children.map((c) => c.plannedStart));
+  if (!task.plannedEnd) task.plannedEnd = maxDate(task.children.map((c) => c.plannedEnd));
+  if (!task.actualStart) task.actualStart = minDate(task.children.map((c) => c.actualStart));
+  if (!task.actualEnd) task.actualEnd = maxDate(task.children.map((c) => c.actualEnd));
   task.status = deriveStatus(task);
   return task;
 }
@@ -457,7 +465,7 @@ function taskSpanDays(task) {
 
 function migrateTask(task) {
   if (!task.children) task.children = [];
-  if (!task.costFiles) task.costFiles = [];
+  task.costFiles = [];
   if (!Array.isArray(task.preds)) task.preds = [];
   if (task.milestone == null) task.milestone = false;
   if (task.percent == null) {
@@ -581,7 +589,7 @@ function cloneTask(task, idMap) {
     ...task,
     id: nid,
     preds: (task.preds || []).map((p) => ({ ...p })),
-    costFiles: cloneFiles(task.costFiles),
+    costFiles: [],
     children: (task.children || []).map((c) => cloneTask(c, map))
   };
   if (!idMap) remapPreds(copy, map);
@@ -687,8 +695,16 @@ function migrate(data) {
     if (!u.deviceScope) u.deviceScope = u.role === "pm" ? "all" : "all";
   });
   (data.projects || []).forEach((p) => {
-    if (!p.files) p.files = [];
+    if (!p.docFiles) p.docFiles = Array.isArray(p.files) ? p.files : [];
+    if (!Array.isArray(p.costFiles)) p.costFiles = [];
     if (!p.location) p.location = (p.info && p.info.location) || "";
+    (p.tasks || []).forEach(function collectCosts(task) {
+      if (task.costFiles && task.costFiles.length) {
+        p.costFiles = p.costFiles.concat(task.costFiles);
+        task.costFiles = [];
+      }
+      (task.children || []).forEach(collectCosts);
+    });
     if (!Array.isArray(p.extra)) {
       p.extra = [];
       const skip = { name: 1, hospital: 1, location: 1, device: 1 };
@@ -737,9 +753,11 @@ function compactData(data) {
       url: f.url || ""
     }));
   (copy.projects || []).forEach((p) => {
-    p.files = slim(p.files);
+    p.docFiles = slim(p.docFiles || p.files);
+    p.costFiles = slim(p.costFiles);
+    p.files = p.docFiles;
     (p.tasks || []).forEach(function walk(task) {
-      task.costFiles = slim(task.costFiles);
+      task.costFiles = [];
       (task.children || []).forEach(walk);
     });
   });
@@ -1223,7 +1241,8 @@ function copyProject(project) {
     location: project.location || "",
     device: project.device,
     extra: (project.extra || []).map((x) => ({ ...x })),
-    files: cloneFiles(project.files),
+    docFiles: cloneFiles(project.docFiles || project.files),
+    costFiles: cloneFiles(project.costFiles),
     tasks: (project.tasks || []).map(cloneTask)
   };
   state.data.projects.push(copy);
@@ -1257,7 +1276,7 @@ function projectView() {
       </div>
       <div class="row no-print">
         <button class="btn secondary" data-info>${tr("projectInfo")}</button>
-        <button class="btn secondary" data-files>${tr("projectFiles")}${(project.files || []).length ? ` (${project.files.length})` : ""}</button>
+        <button class="btn secondary" data-files>${tr("projectFiles")}${((project.docFiles || []).length + (project.costFiles || []).length) ? ` (${(project.docFiles || []).length + (project.costFiles || []).length})` : ""}</button>
         <button class="btn secondary" data-rep>${tr("projectReport")}</button>
         ${isPm() ? `<button class="btn secondary" data-base>${tr("setBaseline")}</button>
         <button class="btn secondary" data-copy>${tr("copyProject")}</button>
@@ -1292,7 +1311,7 @@ function projectView() {
           <th>${tr("plannedStart")} / ${tr("plannedEnd")}</th>
           <th>${tr("actualStart")} / ${tr("actualEnd")}</th>
           <th>${tr("slack")}</th>
-          <th>${tr("plannedCost")}</th><th>${tr("actualCost")}</th><th>${tr("attachments")}</th>
+          <th>${tr("plannedCost")}</th><th>${tr("actualCost")}</th>
           ${isPm() ? "<th></th>" : ""}
         </tr></thead>
         <tbody></tbody>
@@ -1348,7 +1367,6 @@ function taskRow(project, taskItem, parent, index, label, isSub, expanded, isLas
       : `<span class="twist-spacer"></span>`
     : treeMark(true, isLast);
   const count = kids && !expanded ? `<span class="sub-count">${taskItem.children.length}</span>` : "";
-  const filesN = (taskItem.costFiles || []).length;
   const msMark = taskItem.milestone ? `<span class="ms-tag" title="${tr("milestone")}">◆</span>` : "";
   const crit = taskItem.critical ? " critical-task" : "";
   const row = el(`<tr class="${parent ? "child-row" : "parent-row"}${crit}">
@@ -1362,7 +1380,6 @@ function taskRow(project, taskItem, parent, index, label, isSub, expanded, isLas
     <td data-label="${esc(tr("slack"))}">${taskItem.slack === "" || taskItem.slack == null ? "—" : taskItem.slack}</td>
     <td data-label="${esc(tr("plannedCost"))}">${money(taskItem.plannedCost)}</td>
     <td data-label="${esc(tr("actualCost"))}">${money(taskItem.actualCost)}</td>
-    <td data-label="${esc(tr("attachments"))}">${filesN ? filesN : "—"}</td>
     ${isPm() ? `<td class="row actions">
       <button class="btn small secondary" data-up>${tr("up")}</button>
       <button class="btn small secondary" data-down>${tr("down")}</button>
@@ -1823,7 +1840,7 @@ function openProjectForm(project) {
     if (!canEdit) return;
     if (project) applyProjectInfo(project, fd, extraIdsFromForm(modal.querySelector("form") || modal));
     else {
-      const created = { id: uid(), files: [], tasks: [], extra: [] };
+      const created = { id: uid(), files: [], docFiles: [], costFiles: [], tasks: [], extra: [] };
       applyProjectInfo(created, fd, extraIdsFromForm(modal.querySelector("form") || modal));
       state.data.projects.push(created);
     }
@@ -1833,12 +1850,21 @@ function openProjectForm(project) {
 }
 
 function openProjectFiles(project) {
-  if (!project.files) project.files = [];
+  if (!project.docFiles) project.docFiles = project.files || [];
+  if (!project.costFiles) project.costFiles = [];
   showForm(`
     <h3>${tr("projectFiles")}</h3>
-    <div data-proj-files></div>
+    <div class="file-folder">
+      <h4>${tr("projectDocs")}</h4>
+      <div data-docs></div>
+    </div>
+    <div class="file-folder">
+      <h4>${tr("costFiles")}</h4>
+      <div data-costs></div>
+    </div>
   `, () => {}, { hideSave: !isPm() });
-  mountFileBox(document.querySelector("[data-proj-files]"), project.files, () => save(state.data));
+  mountFileBox(document.querySelector("[data-docs]"), project.docFiles, () => save(state.data));
+  mountFileBox(document.querySelector("[data-costs]"), project.costFiles, () => save(state.data));
 }
 
 function openTaskForm(project, taskItem, parent) {
@@ -1858,8 +1884,6 @@ function openTaskForm(project, taskItem, parent) {
     milestone: false,
     percent: 0
   };
-  if (taskItem && !taskItem.costFiles) taskItem.costFiles = [];
-  const fileDraft = taskItem ? taskItem.costFiles : [];
   const disabled = rolled ? "disabled" : "";
   const blocked = taskItem ? descendantIds(taskItem) : new Set();
   const others = flattenTasks(project).filter((t) => !blocked.has(t.id));
@@ -1886,19 +1910,22 @@ function openTaskForm(project, taskItem, parent) {
     <h3>${taskItem ? tr("editTask") : parent ? tr("addSubtask") : tr("addTask")}</h3>
     ${parent ? `<p class="muted">${tr("subtaskOf")}: ${esc(parent.name)}</p>` : ""}
     ${rolled ? `<p class="hint">${tr("rolledUp")}</p>` : ""}
+    <p class="hint">${tr("baselineHint")}</p>
     <label>${tr("taskName")}<input name="name" value="${esc(tk.name)}" required></label>
     <label class="chk"><input type="checkbox" name="milestone" ${tk.milestone ? "checked" : ""}> ${tr("milestone")}</label>
     <div class="grid-2">
-      <label>${tr("plannedStart")}${dateInput("plannedStart", tk.plannedStart, disabled)}</label>
-      <label>${tr("plannedEnd")}${dateInput("plannedEnd", tk.plannedEnd, disabled)}</label>
-      <label>${tr("actualStart")}${dateInput("actualStart", tk.actualStart, disabled)}</label>
-      <label>${tr("actualEnd")}${dateInput("actualEnd", tk.actualEnd, disabled)}</label>
+      <label>${tr("plannedStart")}${dateInput("plannedStart", tk.plannedStart, "")}</label>
+      <label>${tr("plannedEnd")}${dateInput("plannedEnd", tk.plannedEnd, "")}</label>
+      <label>${tr("baseStart")}${dateInput("baseStart", tk.baseStart, "")}</label>
+      <label>${tr("baseEnd")}${dateInput("baseEnd", tk.baseEnd, "")}</label>
+      <label>${tr("actualStart")}${dateInput("actualStart", tk.actualStart, "")}</label>
+      <label>${tr("actualEnd")}${dateInput("actualEnd", tk.actualEnd, "")}</label>
       <label>${tr("plannedCost")}<input type="number" name="plannedCost" value="${tk.plannedCost || 0}" ${disabled}></label>
       <label>${tr("actualCost")}<input type="number" name="actualCost" value="${tk.actualCost || 0}" ${disabled}></label>
-      <label>${tr("percent")}<input type="number" name="percent" min="0" max="100" value="${Number(tk.percent || 0)}" ${disabled}></label>
+      <label>${tr("percent")}<input type="number" name="percent" min="0" max="100" value="${Number(tk.percent || 0)}"></label>
     </div>
     <p class="muted">${tr("dateHint")}: dd/mm/yyyy</p>
-    <label>${tr("status")}<select name="status" ${disabled}>
+    <label>${tr("status")}<select name="status">
       <option value="not_started">${tr("not_started")}</option>
       <option value="in_progress">${tr("in_progress")}</option>
       <option value="done">${tr("done")}</option>
@@ -1906,12 +1933,8 @@ function openTaskForm(project, taskItem, parent) {
     </select></label>
     <h4>${tr("predecessors")}</h4>
     <div class="pred-box">${predRows}</div>
-    <label class="chk"><input type="checkbox" name="autoSchedule" checked> ${tr("autoSchedule")}</label>
+    <label class="chk"><input type="checkbox" name="autoSchedule"> ${tr("autoSchedule")}</label>
     <label>${tr("notes")}<textarea name="notes">${esc(tk.notes || "")}</textarea></label>
-    <div>
-      <h4>${tr("costFiles")}</h4>
-      <div data-cost-files></div>
-    </div>
   `, (fd, modal) => {
     const payload = {
       name: fd.get("name"),
@@ -1925,21 +1948,21 @@ function openTaskForm(project, taskItem, parent) {
           lag: Number(fd.get("plag_" + t.id) || 0)
         }))
     };
-    if (!rolled) {
-      const fields = ["plannedStart", "plannedEnd", "actualStart", "actualEnd"];
-      for (const key of fields) {
-        const parsed = parseDmy(fd.get(key));
-        if (parsed === null) {
-          modal.querySelector(".error").textContent = tr("dateInvalid");
-          return false;
-        }
-        payload[key] = parsed;
+    const fields = ["plannedStart", "plannedEnd", "actualStart", "actualEnd", "baseStart", "baseEnd"];
+    for (const key of fields) {
+      const parsed = parseDmy(fd.get(key));
+      if (parsed === null) {
+        modal.querySelector(".error").textContent = tr("dateInvalid");
+        return false;
       }
+      payload[key] = parsed;
+    }
+    payload.status = fd.get("status");
+    payload.percent = Math.max(0, Math.min(100, Number(fd.get("percent") || 0)));
+    if (payload.milestone && payload.plannedStart) payload.plannedEnd = payload.plannedStart;
+    if (!rolled) {
       payload.plannedCost = Number(fd.get("plannedCost") || 0);
       payload.actualCost = Number(fd.get("actualCost") || 0);
-      payload.status = fd.get("status");
-      payload.percent = Math.max(0, Math.min(100, Number(fd.get("percent") || 0)));
-      if (payload.milestone && payload.plannedStart) payload.plannedEnd = payload.plannedStart;
     }
     if (taskItem) Object.assign(taskItem, payload);
     else {
@@ -1949,7 +1972,7 @@ function openTaskForm(project, taskItem, parent) {
         status: "not_started",
         plannedCost: 0,
         actualCost: 0,
-        costFiles: fileDraft,
+        costFiles: [],
         preds: [],
         milestone: false,
         percent: 0,
@@ -1967,9 +1990,6 @@ function openTaskForm(project, taskItem, parent) {
   });
   const sel = document.querySelector('select[name="status"]');
   if (sel) sel.value = tk.status || "not_started";
-  mountFileBox(document.querySelector("[data-cost-files]"), fileDraft, () => {
-    if (taskItem) save(state.data);
-  });
 }
 
 function showForm(inner, onSave, opts) {

@@ -417,7 +417,14 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 .tree.sub .th {
   position: absolute; inset-inline-start: 7px; top: 50%; width: 9px; height: 1px; background: #8aa0ad;
 }
-.file-box { margin-top: 8px; }
+.file-folder {
+  margin: 12px 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8fbfc;
+}
+.file-folder h4 { margin: 0 0 8px; font-size: 14px; }
 .file-list { list-style: none; padding: 0; margin: 0 0 8px; }
 .file-list li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 4px 0; }
 .chk { display: flex; align-items: center; gap: 6px; font-weight: 600; margin: 0; }
