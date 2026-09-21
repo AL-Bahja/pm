@@ -56,8 +56,24 @@ const I18N = {
     up: "أعلى",
     down: "أسفل",
     gantt: "مخطط جانت",
-    planned: "متوقع",
-    actual: "حقيقي",
+    planned: "الجدول الحالي",
+    actual: "فعلي",
+    baseline: "بيزلاين",
+    setBaseline: "حفظ البيزلاين",
+    baselineSaved: "تم حفظ البيزلاين من الجدول الحالي.",
+    milestone: "مايل ستون",
+    predecessors: "الاعتماديات (Predecessors)",
+    predType: "النوع",
+    lag: "التأخير/التقديم (أيام)",
+    depFS: "FS إنهاء-بدء",
+    depSS: "SS بدء-بدء",
+    depFF: "FF إنهاء-إنهاء",
+    depSF: "SF بدء-إنهاء",
+    percent: "نسبة الإنجاز %",
+    slack: "الفاصل (Slack)",
+    critical: "مسار حرج",
+    autoSchedule: "ضبط التواريخ تلقائياً حسب الاعتماديات",
+    noPreds: "لا اعتماديات",
     not_started: "لم تبدأ",
     in_progress: "قيد التنفيذ",
     done: "منجزة",
@@ -150,7 +166,7 @@ const I18N = {
     googleHint: "من أي حاسبة: اربط جوجل درايف بحساب الشركة picassomega86@gmail.com (هذا التخزين المشترك). بعد ذلك يظهر دخول النظام: مدير المشاريع أو مستخدم آخر.",
     googleWrongAccount: "يفضّل استخدام حساب درايف الشركة:",
     driveFolder: "مجلد التطبيق",
-    ganttSwipe: "على الهاتف: اسحب الجدول يميناً ويساراً لمشاهدة الأيام، ولأعلى ولأسفل للمهام."
+    ganttSwipe: "على الهاتف: اسحب الجدول يميناً ويساراً للتواريخ. المعين = مايل ستون، الأحمر = مسار حرج، الخطوط = اعتماديات."
   },
   en: {
     app: "Al-Bahja Company Project Management",
@@ -209,8 +225,24 @@ const I18N = {
     up: "Up",
     down: "Down",
     gantt: "Gantt chart",
-    planned: "Planned",
+    planned: "Current plan",
     actual: "Actual",
+    baseline: "Baseline",
+    setBaseline: "Save baseline",
+    baselineSaved: "Baseline saved from the current plan.",
+    milestone: "Milestone",
+    predecessors: "Predecessors",
+    predType: "Type",
+    lag: "Lag / lead (days)",
+    depFS: "FS finish-to-start",
+    depSS: "SS start-to-start",
+    depFF: "FF finish-to-finish",
+    depSF: "SF start-to-finish",
+    percent: "% complete",
+    slack: "Slack",
+    critical: "Critical path",
+    autoSchedule: "Shift dates automatically from dependencies",
+    noPreds: "No predecessors",
     not_started: "Not started",
     in_progress: "In progress",
     done: "Done",
@@ -303,7 +335,7 @@ const I18N = {
     googleHint: "On any PC, connect Google Drive with the company account picassomega86@gmail.com (shared storage). Then sign in as project manager or another user.",
     googleWrongAccount: "Prefer the company Drive account:",
     driveFolder: "App folder",
-    ganttSwipe: "On phone: swipe the chart left and right for dates, up and down for tasks."
+    ganttSwipe: "On phone: swipe for dates. Diamond = milestone, red = critical path, lines = dependencies."
   }
 };
 
@@ -393,6 +425,176 @@ function rollupProject(project) {
   return project;
 }
 
+function flattenTasks(project) {
+  const out = [];
+  (function walk(list) {
+    (list || []).forEach((t) => {
+      out.push(t);
+      walk(t.children || []);
+    });
+  })(project.tasks || []);
+  return out;
+}
+
+function descendantIds(task) {
+  const ids = new Set([task.id]);
+  (task.children || []).forEach((c) => descendantIds(c).forEach((id) => ids.add(id)));
+  return ids;
+}
+
+function addDaysIso(value, n) {
+  const d = parseDay(value);
+  if (!d) return "";
+  d.setDate(d.getDate() + Number(n || 0));
+  return iso(d);
+}
+
+function taskSpanDays(task) {
+  if (task.milestone) return 0;
+  if (!task.plannedStart || !task.plannedEnd) return 0;
+  return daysBetween(task.plannedStart, task.plannedEnd);
+}
+
+function migrateTask(task) {
+  if (!task.children) task.children = [];
+  if (!task.costFiles) task.costFiles = [];
+  if (!Array.isArray(task.preds)) task.preds = [];
+  if (task.milestone == null) task.milestone = false;
+  if (task.percent == null) {
+    task.percent = task.status === "done" ? 100 : task.status === "in_progress" ? 50 : 0;
+  }
+  if (task.milestone && task.plannedStart && !task.plannedEnd) task.plannedEnd = task.plannedStart;
+  task.children.forEach(migrateTask);
+}
+
+function predText(task, project) {
+  const list = flattenTasks(project);
+  const bits = (task.preds || [])
+    .map((p) => {
+      const idx = list.findIndex((x) => x.id === p.id);
+      if (idx < 0) return "";
+      const lag = Number(p.lag || 0);
+      const lagS = lag ? (lag > 0 ? `+${lag}` : String(lag)) : "";
+      return `${idx + 1}${p.type || "FS"}${lagS}`;
+    })
+    .filter(Boolean);
+  return bits.join("; ") || "—";
+}
+
+function applyDependencies(project) {
+  const list = flattenTasks(project);
+  const byId = Object.fromEntries(list.map((t) => [t.id, t]));
+  for (let n = 0; n < 30; n++) {
+    let moved = false;
+    list.forEach((t) => {
+      if (hasChildren(t) || !t.plannedStart) return;
+      const span = taskSpanDays(t);
+      (t.preds || []).forEach((link) => {
+        const pred = byId[link.id];
+        if (!pred || !pred.plannedStart) return;
+        const type = link.type || "FS";
+        const lag = Number(link.lag || 0);
+        const predStart = pred.plannedStart;
+        const predEnd = pred.plannedEnd || pred.plannedStart;
+        let needStart = t.plannedStart;
+        let needEnd = t.plannedEnd || t.plannedStart;
+        if (type === "FS") needStart = addDaysIso(predEnd, 1 + lag);
+        if (type === "SS") needStart = addDaysIso(predStart, lag);
+        if (type === "FF") {
+          needEnd = addDaysIso(predEnd, lag);
+          needStart = addDaysIso(needEnd, t.milestone ? 0 : -span);
+        }
+        if (type === "SF") {
+          needEnd = addDaysIso(predStart, lag);
+          needStart = addDaysIso(needEnd, t.milestone ? 0 : -span);
+        }
+        if (parseDay(needStart) && parseDay(t.plannedStart) && parseDay(needStart) > parseDay(t.plannedStart)) {
+          t.plannedStart = needStart;
+          t.plannedEnd = t.milestone ? needStart : addDaysIso(needStart, span);
+          moved = true;
+        } else if ((type === "FF" || type === "SF") && parseDay(needEnd) && parseDay(t.plannedEnd || t.plannedStart) && parseDay(needEnd) > parseDay(t.plannedEnd || t.plannedStart)) {
+          t.plannedEnd = needEnd;
+          t.plannedStart = t.milestone ? needEnd : addDaysIso(needEnd, -span);
+          moved = true;
+        }
+      });
+      if (t.milestone) t.plannedEnd = t.plannedStart;
+    });
+    if (!moved) break;
+  }
+  rollupProject(project);
+}
+
+function computeCritical(project) {
+  const all = flattenTasks(project);
+  all.forEach((t) => {
+    t.critical = false;
+    t.slack = "";
+  });
+  const tasks = all.filter((t) => !hasChildren(t) && t.plannedStart);
+  tasks.forEach((t) => {
+    const succs = [];
+    tasks.forEach((s) => {
+      (s.preds || []).forEach((p) => {
+        if (p.id === t.id) succs.push(s);
+      });
+    });
+    if (!succs.length) {
+      const projectEnd = maxDate(tasks.map((x) => x.plannedEnd || x.plannedStart));
+      const slackEnd = daysBetween(t.plannedEnd || t.plannedStart, projectEnd);
+      t.slack = slackEnd;
+      t.critical = slackEnd <= 0 && (t.preds || []).length > 0;
+      return;
+    }
+    let slack = 9999;
+    succs.forEach((s) => {
+      const link = (s.preds || []).find((p) => p.id === t.id) || { type: "FS", lag: 0 };
+      const lag = Number(link.lag || 0);
+      const type = link.type || "FS";
+      let allowed;
+      if (type === "FS") allowed = daysBetween(t.plannedEnd || t.plannedStart, addDaysIso(s.plannedStart, -1)) - lag;
+      else if (type === "SS") allowed = daysBetween(t.plannedStart, s.plannedStart) - lag;
+      else if (type === "FF") allowed = daysBetween(t.plannedEnd || t.plannedStart, s.plannedEnd || s.plannedStart) - lag;
+      else allowed = daysBetween(t.plannedStart, s.plannedEnd || s.plannedStart) - lag;
+      slack = Math.min(slack, allowed);
+    });
+    t.slack = Number.isFinite(slack) ? slack : "";
+    t.critical = slack <= 0 && (t.preds || []).length + succs.length > 0;
+  });
+  all.forEach((t) => {
+    if (hasChildren(t) && (t.children || []).some((c) => c.critical)) t.critical = true;
+  });
+}
+
+function setProjectBaseline(project) {
+  flattenTasks(project).forEach((t) => {
+    t.baseStart = t.plannedStart || "";
+    t.baseEnd = t.plannedEnd || "";
+  });
+}
+
+function cloneTask(task, idMap) {
+  const map = idMap || {};
+  const nid = uid();
+  map[task.id] = nid;
+  const copy = {
+    ...task,
+    id: nid,
+    preds: (task.preds || []).map((p) => ({ ...p })),
+    costFiles: cloneFiles(task.costFiles),
+    children: (task.children || []).map((c) => cloneTask(c, map))
+  };
+  if (!idMap) remapPreds(copy, map);
+  return copy;
+}
+
+function remapPreds(task, map) {
+  task.preds = (task.preds || [])
+    .map((p) => ({ ...p, id: map[p.id] }))
+    .filter((p) => p.id);
+  (task.children || []).forEach((c) => remapPreds(c, map));
+}
+
 function leafTasks(task) {
   if (!hasChildren(task)) return [task];
   return task.children.flatMap(leafTasks);
@@ -430,7 +632,10 @@ function makeTask(name, ps, pe, as, ae, pc, ac, status, children) {
     status,
     notes: "",
     children: children || [],
-    costFiles: []
+    costFiles: [],
+    preds: [],
+    milestone: false,
+    percent: 0
   };
 }
 
@@ -443,15 +648,6 @@ function cloneFiles(files) {
     driveFileId: f.driveFileId || "",
     url: f.url || ""
   }));
-}
-
-function cloneTask(task) {
-  return {
-    ...task,
-    id: uid(),
-    costFiles: cloneFiles(task.costFiles),
-    children: (task.children || []).map(cloneTask)
-  };
 }
 
 function defaultDevices() {
@@ -510,11 +706,7 @@ function migrate(data) {
         p.extra.push({ id, ar: id, en: id, value: p.info[id] || "" });
       });
     }
-    (p.tasks || []).forEach(function walk(task) {
-      if (!task.children) task.children = [];
-      if (!task.costFiles) task.costFiles = [];
-      task.children.forEach(walk);
-    });
+    (p.tasks || []).forEach(migrateTask);
     rollupProject(p);
   });
   return data;
@@ -1056,6 +1248,7 @@ function projectView() {
   const project = state.data.projects.find((p) => p.id === state.projectId);
   if (!project || !canOpenProject(project)) return el(`<p>${tr("projects")}</p>`);
   rollupProject(project);
+  computeCritical(project);
   const s = projectStats(project);
   const box = el(`<div>
     <div class="project-head">
@@ -1066,7 +1259,8 @@ function projectView() {
         <button class="btn secondary" data-info>${tr("projectInfo")}</button>
         <button class="btn secondary" data-files>${tr("projectFiles")}${(project.files || []).length ? ` (${project.files.length})` : ""}</button>
         <button class="btn secondary" data-rep>${tr("projectReport")}</button>
-        ${isPm() ? `<button class="btn secondary" data-copy>${tr("copyProject")}</button>
+        ${isPm() ? `<button class="btn secondary" data-base>${tr("setBaseline")}</button>
+        <button class="btn secondary" data-copy>${tr("copyProject")}</button>
         <button class="btn danger" data-delp>${tr("delete")}</button>` : ""}
       </div>
     </div>
@@ -1078,7 +1272,13 @@ function projectView() {
     </div>
     <h3>${tr("gantt")}</h3>
     <p class="hint gantt-hint no-print">${tr("ganttSwipe")}</p>
-    <div class="legend"><span><i class="swatch planned"></i>${tr("planned")}</span><span><i class="swatch actual"></i>${tr("actual")}</span></div>
+    <div class="legend">
+      <span><i class="swatch baseline"></i>${tr("baseline")}</span>
+      <span><i class="swatch planned"></i>${tr("planned")}</span>
+      <span><i class="swatch actual"></i>${tr("actual")}</span>
+      <span><i class="swatch critical"></i>${tr("critical")}</span>
+      <span><i class="swatch milestone"></i>${tr("milestone")}</span>
+    </div>
     <div class="card gantt-wrap">${ganttHtml(project)}</div>
     <div class="row" style="margin:18px 0 8px; justify-content:space-between">
       <h3>${tr("tasks")}</h3>
@@ -1087,9 +1287,11 @@ function projectView() {
     <div class="card table-scroll" style="padding:8px 16px">
       <table class="stack-table">
         <thead><tr>
-          <th>#</th><th>${tr("taskName")}</th><th>${tr("status")}</th>
+          <th>#</th><th>${tr("taskName")}</th><th>${tr("predecessors")}</th><th>${tr("status")}</th>
+          <th>${tr("percent")}</th>
           <th>${tr("plannedStart")} / ${tr("plannedEnd")}</th>
           <th>${tr("actualStart")} / ${tr("actualEnd")}</th>
+          <th>${tr("slack")}</th>
           <th>${tr("plannedCost")}</th><th>${tr("actualCost")}</th><th>${tr("attachments")}</th>
           ${isPm() ? "<th></th>" : ""}
         </tr></thead>
@@ -1116,6 +1318,13 @@ function projectView() {
   box.querySelector("[data-files]").onclick = () => openProjectFiles(project);
   const copy = box.querySelector("[data-copy]");
   if (copy) copy.onclick = () => copyProject(project);
+  const base = box.querySelector("[data-base]");
+  if (base) base.onclick = () => {
+    setProjectBaseline(project);
+    save(state.data, true);
+    alert(tr("baselineSaved"));
+    render();
+  };
   box.querySelector("[data-rep]").onclick = () => {
     state.view = "reports";
     state.reportProjectId = project.id;
@@ -1140,12 +1349,17 @@ function taskRow(project, taskItem, parent, index, label, isSub, expanded, isLas
     : treeMark(true, isLast);
   const count = kids && !expanded ? `<span class="sub-count">${taskItem.children.length}</span>` : "";
   const filesN = (taskItem.costFiles || []).length;
-  const row = el(`<tr class="${parent ? "child-row" : "parent-row"}">
+  const msMark = taskItem.milestone ? `<span class="ms-tag" title="${tr("milestone")}">◆</span>` : "";
+  const crit = taskItem.critical ? " critical-task" : "";
+  const row = el(`<tr class="${parent ? "child-row" : "parent-row"}${crit}">
     <td data-label="#"> ${label}</td>
-    <td data-label="${esc(tr("taskName"))}" class="${isSub ? "task-indent" : ""}"><span class="task-name-cell">${twist}<span>${esc(taskItem.name)}</span>${count}</span></td>
+    <td data-label="${esc(tr("taskName"))}" class="${isSub ? "task-indent" : ""}"><span class="task-name-cell">${twist}<span>${esc(taskItem.name)}</span>${msMark}${count}</span></td>
+    <td data-label="${esc(tr("predecessors"))}">${esc(predText(taskItem, project))}</td>
     <td data-label="${esc(tr("status"))}"><span class="badge ${taskItem.status}">${tr(taskItem.status)}</span></td>
+    <td data-label="${esc(tr("percent"))}">${Number(taskItem.percent || 0)}%</td>
     <td data-label="${esc(tr("planned"))}">${fmtDate(taskItem.plannedStart)} → ${fmtDate(taskItem.plannedEnd)}</td>
     <td data-label="${esc(tr("actual"))}">${fmtDate(taskItem.actualStart)} → ${fmtDate(taskItem.actualEnd)}</td>
+    <td data-label="${esc(tr("slack"))}">${taskItem.slack === "" || taskItem.slack == null ? "—" : taskItem.slack}</td>
     <td data-label="${esc(tr("plannedCost"))}">${money(taskItem.plannedCost)}</td>
     <td data-label="${esc(tr("actualCost"))}">${money(taskItem.actualCost)}</td>
     <td data-label="${esc(tr("attachments"))}">${filesN ? filesN : "—"}</td>
@@ -1178,7 +1392,7 @@ function taskRow(project, taskItem, parent, index, label, isSub, expanded, isLas
 function collectDates(project) {
   const dates = [];
   flatRows(project.tasks).forEach(({ task }) => {
-    ["plannedStart", "plannedEnd", "actualStart", "actualEnd"].forEach((k) => {
+    ["plannedStart", "plannedEnd", "actualStart", "actualEnd", "baseStart", "baseEnd"].forEach((k) => {
       if (task[k]) dates.push(new Date(task[k] + "T00:00:00"));
     });
   });
@@ -1342,12 +1556,17 @@ function mountFileBox(host, files, onChange) {
 }
 
 function ganttHtml(project) {
+  computeCritical(project);
   const dates = collectDates(project);
   if (!dates.length) return `<p class="muted">—</p>`;
   const min = startOfMonth(new Date(Math.min(...dates)));
   const max = endOfMonth(new Date(Math.max(...dates)));
   const days = enumerateDays(min, max);
-  const dayW = window.matchMedia("(max-width: 800px)").matches ? 14 : 16;
+  const mobile = window.matchMedia("(max-width: 800px)").matches;
+  const dayW = mobile ? 14 : 16;
+  const lockW = mobile ? 110 : 484;
+  const rowH = mobile ? 28 : 22;
+  const headH = 48;
   const scaleW = days.length * dayW;
   const years = groupDays(days, (d) => String(d.getFullYear()));
   const months = groupDays(days, (d) => `${d.getFullYear()}-${d.getMonth()}`);
@@ -1377,7 +1596,13 @@ function ganttHtml(project) {
     .join("");
 
   const vis = visibleTaskRows(project);
-  const barHtml = (start, end, cls) => {
+  const xOf = (isoDate, edge) => {
+    const a = parseDay(isoDate);
+    if (!a) return null;
+    const i = Math.round((a - min) / 86400000);
+    return lockW + (edge === "end" ? i + 1 : i) * dayW;
+  };
+  const barHtml = (start, end, cls, pct) => {
     const a = parseDay(start);
     if (!a) return "";
     const b = parseDay(end) || a;
@@ -1385,7 +1610,15 @@ function ganttHtml(project) {
     const i2 = Math.round((b - min) / 86400000);
     const left = Math.max(0, i1) * dayW;
     const width = Math.max(1, i2 - i1 + 1) * dayW;
-    return `<div class="bar ${cls}" style="left:${left}px;width:${width}px" title="${fmtDate(start)} → ${fmtDate(end)}"></div>`;
+    const fill = pct > 0 ? `<i class="bar-fill" style="width:${Math.min(100, pct)}%"></i>` : "";
+    return `<div class="bar ${cls}" style="left:${left}px;width:${width}px" title="${fmtDate(start)} → ${fmtDate(end)}">${fill}</div>`;
+  };
+  const diamondHtml = (date, cls) => {
+    const a = parseDay(date);
+    if (!a) return "";
+    const i = Math.round((a - min) / 86400000);
+    const left = i * dayW + Math.max(2, dayW / 2 - 6);
+    return `<div class="ms-mark ${cls}" style="left:${left}px" title="${fmtDate(date)}"></div>`;
   };
   const rows = vis
     .map(({ task, depth, last }) => {
@@ -1397,20 +1630,52 @@ function ganttHtml(project) {
           ? `<button class="twist ${expanded ? "open" : ""}" type="button" data-twist="${task.id}" title="${expanded ? tr("collapse") : tr("expand")}">${expanded ? "▾" : "▸"}</button>`
           : `<span class="twist-spacer"></span>`;
       const count = kids && !expanded ? `<span class="sub-count">${task.children.length}</span>` : "";
-      return `<div class="gantt-row ${depth ? "sub" : ""}">
+      const msIcon = task.milestone ? `<span class="ms-tag">◆</span>` : "";
+      const planCls = `planned${task.critical ? " critical" : ""}${kids ? " summary" : ""}`;
+      const planBar = task.milestone
+        ? diamondHtml(task.plannedStart || task.plannedEnd, `plan${task.critical ? " critical" : ""}`)
+        : barHtml(task.plannedStart, task.plannedEnd, planCls, Number(task.percent || 0));
+      return `<div class="gantt-row ${depth ? "sub" : ""} ${task.critical ? "is-critical" : ""}">
         <div class="gantt-sticky-name">
-          <div class="gantt-name">${twist}<span class="gantt-name-text">${esc(task.name)}</span>${count}</div>
+          <div class="gantt-name">${twist}<span class="gantt-name-text">${esc(task.name)}</span>${msIcon}${count}</div>
           <div class="gantt-col gantt-dates-p">${dateRange(task.plannedStart, task.plannedEnd)}</div>
           <div class="gantt-col gantt-dates-a">${dateRange(task.actualStart, task.actualEnd)}</div>
         </div>
         <div class="gantt-track" style="width:${scaleW}px">
           ${monthLines}
-          ${barHtml(task.plannedStart, task.plannedEnd, "planned")}
-          ${barHtml(task.actualStart, task.actualEnd, "actual")}
+          ${barHtml(task.baseStart, task.baseEnd, "baseline")}
+          ${planBar}
+          ${task.milestone ? diamondHtml(task.actualStart || task.actualEnd, "act") : barHtml(task.actualStart, task.actualEnd, "actual")}
         </div>
       </div>`;
     })
     .join("");
+
+  const idToRow = {};
+  vis.forEach((row, i) => {
+    idToRow[row.task.id] = i;
+  });
+  const links = [];
+  vis.forEach((row, si) => {
+    (row.task.preds || []).forEach((p) => {
+      const pi = idToRow[p.id];
+      if (pi == null) return;
+      const pred = vis[pi].task;
+      const type = p.type || "FS";
+      const x1 = xOf(type === "SS" || type === "SF" ? pred.plannedStart : pred.plannedEnd || pred.plannedStart, type === "SS" || type === "SF" ? "start" : "end");
+      const x2 = xOf(type === "FF" || type === "SF" ? row.task.plannedEnd || row.task.plannedStart : row.task.plannedStart, type === "FF" || type === "SF" ? "end" : "start");
+      if (x1 == null || x2 == null) return;
+      const y1 = headH + pi * rowH + rowH / 2;
+      const y2 = headH + si * rowH + rowH / 2;
+      const mid = x1 + Math.max(10, Math.min(18, Math.abs(x2 - x1) / 3));
+      links.push(`<path d="M ${x1} ${y1} H ${mid} V ${y2} H ${x2}" />
+        <polygon points="${x2},${y2} ${x2 - 6},${y2 - 4} ${x2 - 6},${y2 + 4}" />`);
+    });
+  });
+  const svgH = headH + vis.length * rowH;
+  const svg = links.length
+    ? `<svg class="gantt-links" width="${lockW + scaleW}" height="${svgH}" viewBox="0 0 ${lockW + scaleW} ${svgH}" preserveAspectRatio="none">${links.join("")}</svg>`
+    : "";
 
   return `<div class="gantt" style="--day-w:${dayW}px">
     <div class="gantt-scroll">
@@ -1427,6 +1692,7 @@ function ganttHtml(project) {
         </div>
       </div>
       ${rows}
+      ${svg}
     </div>
   </div>`;
 }
@@ -1587,16 +1853,41 @@ function openTaskForm(project, taskItem, parent) {
     actualCost: "",
     status: "not_started",
     notes: "",
-    children: []
+    children: [],
+    preds: [],
+    milestone: false,
+    percent: 0
   };
   if (taskItem && !taskItem.costFiles) taskItem.costFiles = [];
   const fileDraft = taskItem ? taskItem.costFiles : [];
   const disabled = rolled ? "disabled" : "";
+  const blocked = taskItem ? descendantIds(taskItem) : new Set();
+  const others = flattenTasks(project).filter((t) => !blocked.has(t.id));
+  const predMap = Object.fromEntries((tk.preds || []).map((p) => [p.id, p]));
+  const predRows = others.length
+    ? others
+        .map((t) => {
+          const cur = predMap[t.id];
+          return `<label class="pred-row">
+            <input type="checkbox" name="pred_${esc(t.id)}" ${cur ? "checked" : ""}>
+            <span>${esc(t.name)}</span>
+            <select name="ptype_${esc(t.id)}">
+              <option value="FS" ${!cur || cur.type === "FS" ? "selected" : ""}>${tr("depFS")}</option>
+              <option value="SS" ${cur && cur.type === "SS" ? "selected" : ""}>${tr("depSS")}</option>
+              <option value="FF" ${cur && cur.type === "FF" ? "selected" : ""}>${tr("depFF")}</option>
+              <option value="SF" ${cur && cur.type === "SF" ? "selected" : ""}>${tr("depSF")}</option>
+            </select>
+            <input type="number" name="plag_${esc(t.id)}" value="${cur ? Number(cur.lag || 0) : 0}" title="${esc(tr("lag"))}">
+          </label>`;
+        })
+        .join("")
+    : `<p class="muted">${tr("noPreds")}</p>`;
   showForm(`
     <h3>${taskItem ? tr("editTask") : parent ? tr("addSubtask") : tr("addTask")}</h3>
     ${parent ? `<p class="muted">${tr("subtaskOf")}: ${esc(parent.name)}</p>` : ""}
     ${rolled ? `<p class="hint">${tr("rolledUp")}</p>` : ""}
     <label>${tr("taskName")}<input name="name" value="${esc(tk.name)}" required></label>
+    <label class="chk"><input type="checkbox" name="milestone" ${tk.milestone ? "checked" : ""}> ${tr("milestone")}</label>
     <div class="grid-2">
       <label>${tr("plannedStart")}${dateInput("plannedStart", tk.plannedStart, disabled)}</label>
       <label>${tr("plannedEnd")}${dateInput("plannedEnd", tk.plannedEnd, disabled)}</label>
@@ -1604,6 +1895,7 @@ function openTaskForm(project, taskItem, parent) {
       <label>${tr("actualEnd")}${dateInput("actualEnd", tk.actualEnd, disabled)}</label>
       <label>${tr("plannedCost")}<input type="number" name="plannedCost" value="${tk.plannedCost || 0}" ${disabled}></label>
       <label>${tr("actualCost")}<input type="number" name="actualCost" value="${tk.actualCost || 0}" ${disabled}></label>
+      <label>${tr("percent")}<input type="number" name="percent" min="0" max="100" value="${Number(tk.percent || 0)}" ${disabled}></label>
     </div>
     <p class="muted">${tr("dateHint")}: dd/mm/yyyy</p>
     <label>${tr("status")}<select name="status" ${disabled}>
@@ -1612,6 +1904,9 @@ function openTaskForm(project, taskItem, parent) {
       <option value="done">${tr("done")}</option>
       <option value="delayed">${tr("delayed")}</option>
     </select></label>
+    <h4>${tr("predecessors")}</h4>
+    <div class="pred-box">${predRows}</div>
+    <label class="chk"><input type="checkbox" name="autoSchedule" checked> ${tr("autoSchedule")}</label>
     <label>${tr("notes")}<textarea name="notes">${esc(tk.notes || "")}</textarea></label>
     <div>
       <h4>${tr("costFiles")}</h4>
@@ -1620,7 +1915,15 @@ function openTaskForm(project, taskItem, parent) {
   `, (fd, modal) => {
     const payload = {
       name: fd.get("name"),
-      notes: fd.get("notes")
+      notes: fd.get("notes"),
+      milestone: fd.get("milestone") === "on",
+      preds: others
+        .filter((t) => fd.get("pred_" + t.id))
+        .map((t) => ({
+          id: t.id,
+          type: String(fd.get("ptype_" + t.id) || "FS"),
+          lag: Number(fd.get("plag_" + t.id) || 0)
+        }))
     };
     if (!rolled) {
       const fields = ["plannedStart", "plannedEnd", "actualStart", "actualEnd"];
@@ -1635,6 +1938,8 @@ function openTaskForm(project, taskItem, parent) {
       payload.plannedCost = Number(fd.get("plannedCost") || 0);
       payload.actualCost = Number(fd.get("actualCost") || 0);
       payload.status = fd.get("status");
+      payload.percent = Math.max(0, Math.min(100, Number(fd.get("percent") || 0)));
+      if (payload.milestone && payload.plannedStart) payload.plannedEnd = payload.plannedStart;
     }
     if (taskItem) Object.assign(taskItem, payload);
     else {
@@ -1645,6 +1950,9 @@ function openTaskForm(project, taskItem, parent) {
         plannedCost: 0,
         actualCost: 0,
         costFiles: fileDraft,
+        preds: [],
+        milestone: false,
+        percent: 0,
         ...payload
       };
       if (parent) {
@@ -1653,6 +1961,7 @@ function openTaskForm(project, taskItem, parent) {
         expandTask(parent.id);
       } else project.tasks.push(created);
     }
+    if (fd.get("autoSchedule") === "on") applyDependencies(project);
     rollupProject(project);
     save(state.data);
   });

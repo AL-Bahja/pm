@@ -154,6 +154,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   direction: ltr;
 }
 .gantt-scroll {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -258,9 +259,46 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 }
 .bar {
   position: absolute; height: 6px; border-radius: 3px; min-width: 4px; z-index: 2;
+  overflow: hidden;
 }
-.bar.planned { background: var(--planned); top: 3px; }
-.bar.actual { background: var(--actual); top: 12px; }
+.bar.baseline { background: #cbd5e1; top: 2px; height: 4px; z-index: 1; }
+.bar.planned { background: var(--planned); top: 8px; }
+.bar.actual { background: var(--actual); top: 15px; }
+.bar.critical { background: #b42318; }
+.bar.summary { height: 5px; border-radius: 1px; }
+.bar-fill { display: block; height: 100%; background: rgba(255,255,255,0.4); }
+.ms-mark {
+  position: absolute; width: 10px; height: 10px; transform: rotate(45deg);
+  top: 8px; z-index: 4; background: #64748b;
+}
+.ms-mark.critical { background: #b42318; }
+.ms-mark.act { background: var(--actual); top: 15px; width: 8px; height: 8px; }
+.ms-tag { color: var(--teal); font-size: 12px; }
+.gantt-links {
+  position: absolute; left: 0; top: 0; z-index: 3; pointer-events: none; overflow: visible;
+}
+.gantt-links path { fill: none; stroke: #334155; stroke-width: 1.25; }
+.gantt-links polygon { fill: #334155; }
+.pred-box {
+  max-height: 220px; overflow: auto;
+  border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: #fbfcfd;
+}
+.pred-row {
+  display: grid; grid-template-columns: auto 1fr 150px 72px;
+  gap: 8px; align-items: center; font-weight: 500; margin: 6px 0;
+}
+.pred-row input, .pred-row select { width: auto; margin: 0; }
+.pred-row input[type="checkbox"] { width: 18px; height: 18px; }
+.critical-task { background: #fff7f6; }
+.legend { flex-wrap: wrap; }
+.swatch.baseline { background: #cbd5e1; }
+.swatch.critical { background: #b42318; }
+.swatch.milestone { width: 10px; height: 10px; background: #64748b; transform: rotate(45deg); border-radius: 1px; }
+
+@media (max-width: 800px) {
+  .pred-row { grid-template-columns: auto 1fr; }
+  .pred-row select, .pred-row input[type="number"] { grid-column: 1 / -1; width: 100%; }
+}
 
 @media (max-width: 800px) {
   .page { padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); }
