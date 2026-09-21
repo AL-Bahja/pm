@@ -791,7 +791,7 @@ function passwordGateView(user) {
     <form class="login-card">
       <div class="brand"><div class="logo">PM</div><div><h1>${tr("changePassword")}</h1><div class="muted">${esc(user.name)}</div></div></div>
       <p class="hint">${tr("mustChangePass")}</p>
-      <label>${tr("newPassword")}<input name="password" type="text" minlength="8" required autocomplete="off"></label>
+      <label>${tr("newPassword")}<input name="password" type="password" minlength="8" required autocomplete="off"></label>
       <p class="error"></p>
       <button class="btn" type="submit">${tr("save")}</button>
     </form>
@@ -850,7 +850,7 @@ function loginView() {
       <div class="brand"><div class="logo">PM</div><div><h1>${tr("loginTitle")}</h1><div class="muted">${tr("app")}</div></div></div>
       <p class="hint">${tr("loginHint")}</p>
       <label>${tr("username")}<input name="username" autocomplete="username" required></label>
-      <label>${tr("password")}<input name="password" type="text" autocomplete="current-password" required></label>
+      <label>${tr("password")}<input name="password" type="password" autocomplete="current-password" required></label>
       <p class="error"></p>
       <div class="row">
         <button class="btn" type="submit">${tr("enter")}</button>
