@@ -4,19 +4,12 @@ const QUEUE_NAME = "mail_queue.json";
 const SECRET = "bahja-2026-pm";
 
 /**
- * شغّل هذه الدالة مرة واحدة من المحرر: Run ▶ AUTHORIZE
- * ثم اسمح بالبريد (Gmail). بعدها Deploy → New version.
+ * شغّل مرة واحدة: اختر AUTHORIZE ثم تشغيل.
+ * اضغط «مراجعة الأذونات» واسمح بكل الأذونات، ثم احفظ.
  */
 function AUTHORIZE() {
   MailApp.getRemainingDailyQuota();
   processMailQueue();
-  var has = false;
-  ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (t.getHandlerFunction() === "processMailQueue") has = true;
-  });
-  if (!has) {
-    ScriptApp.newTrigger("processMailQueue").timeBased().everyMinutes(1).create();
-  }
 }
 
 function json_(obj) {
@@ -94,31 +87,6 @@ function delete_(id) {
   DriveApp.getFileById(id).setTrashed(true);
 }
 
-function asRows_(rows) {
-  return (rows || []).map(function (row) {
-    return (row || []).map(function (c) {
-      return String(c == null ? "" : c);
-    });
-  });
-}
-
-function addTable_(body, rows, rtl) {
-  const clean = asRows_(rows).filter(function (r) { return r.length; });
-  if (!clean.length) return;
-  const table = body.appendTable(clean);
-  table.setBorderWidth(0.5);
-  if (rtl) {
-    try {
-      for (var i = 0; i < table.getNumRows(); i++) {
-        var row = table.getRow(i);
-        for (var j = 0; j < row.getNumCells(); j++) {
-          row.getCell(j).getChild(0).asParagraph().setLeftToRight(false);
-        }
-      }
-    } catch (err) {}
-  }
-}
-
 function emailReport_(body) {
   try {
     const to = String(body.to || "")
@@ -155,19 +123,12 @@ function emailReport_(body) {
 function sendMailJob_(job) {
   const subject = String(job.subject || "Report");
   const html = String(job.html || subject);
-  const attachments = [];
-  try {
-    const pdf = reportPdf_(job, subject);
-    if (pdf) attachments.push(pdf);
-  } catch (pdfErr) {
-    attachments.push(Utilities.newBlob(html, MimeType.HTML, subject.slice(0, 80) + ".html"));
-  }
   MailApp.sendEmail({
     to: job.to,
     subject: subject,
     htmlBody: html,
     name: "Al-Bahja PM",
-    attachments: attachments
+    attachments: [Utilities.newBlob(html, MimeType.HTML, subject.slice(0, 80) + ".html")]
   });
 }
 
@@ -212,33 +173,4 @@ function processMailQueue() {
     }
   });
   file.setContent(JSON.stringify(left));
-}
-
-function reportPdf_(body, title) {
-  const name = String(title || "report").replace(/[\\/:*?"<>|]/g, " ").slice(0, 80);
-  const doc = DocumentApp.create(name);
-  const b = doc.getBody();
-  b.clear();
-  const rtl = body.dir === "rtl";
-  function heading(text, level) {
-    if (!text) return;
-    const p = b.appendParagraph(String(text));
-    p.setHeading(level || DocumentApp.ParagraphHeading.HEADING2);
-    if (rtl) p.setLeftToRight(false);
-  }
-  heading(body.title || name, DocumentApp.ParagraphHeading.HEADING1);
-  heading(body.infoTitle || "");
-  addTable_(b, body.infoRows, rtl);
-  heading(body.kpiTitle || "");
-  addTable_(b, body.kpiRows, rtl);
-  heading(body.taskTitle || "");
-  const taskRows = [];
-  if (body.taskHead) taskRows.push(body.taskHead);
-  (body.taskRows || []).forEach(function (r) { taskRows.push(r); });
-  addTable_(b, taskRows, rtl);
-  doc.saveAndClose();
-  const file = DriveApp.getFileById(doc.getId());
-  const pdf = file.getAs(MimeType.PDF).setName(name + ".pdf");
-  file.setTrashed(true);
-  return pdf;
 }
