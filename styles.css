@@ -983,23 +983,15 @@ body.pdf-capture .report-gantt {
 }
 body.pdf-capture .print-sheet { break-after: page; page-break-after: always; }
 .pdf-report-root {
-  position: fixed;
+  position: absolute;
   left: 0;
   top: 0;
-  width: 1100px;
-  max-width: 100%;
+  width: 800px;
   background: #fff;
-  z-index: 30;
-  padding: 12px;
+  color: #123040;
+  z-index: 40;
+  padding: 16px;
   box-sizing: border-box;
-  pointer-events: none;
-}
-.pdf-report-root .print-only { display: block !important; }
-.pdf-report-root .gantt-wrap,
-.pdf-report-root .report-gantt {
-  height: auto !important;
-  max-height: none !important;
-  overflow: visible !important;
 }
 .error { color: var(--danger); min-height: 1.2em; }
 .print-only { display: none !important; }

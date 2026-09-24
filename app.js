@@ -3005,34 +3005,41 @@ function ganttEmailHtml(project) {
     const i = Math.round((d.getTime() - min.getTime()) / 86400000);
     return Math.max(0, Math.min(n - 1, i));
   };
-  const barRow = (start, end, color) => {
+  const barCell = (start, end, color) => {
     const a = idx(start);
+    if (a == null) return `<span>—</span>`;
     const b = idx(end);
-    if (a == null) return "";
     const i2 = b == null ? a : b;
     const left = Math.round((Math.min(a, i2) / n) * 100);
-    const width = Math.max(2, Math.round(((Math.abs(i2 - a) + 1) / n) * 100));
+    const width = Math.max(3, Math.round(((Math.abs(i2 - a) + 1) / n) * 100));
     const right = Math.max(0, 100 - left - width);
-    return `<table width="100%" cellpadding="0" cellspacing="0" style="margin:1px 0"><tr>
+    return `<table width="100%" cellpadding="0" cellspacing="0"><tr>
       <td width="${left}%"></td>
-      <td width="${width}%" bgcolor="${color}" style="height:8px;line-height:8px;font-size:1px">&nbsp;</td>
+      <td width="${width}%" bgcolor="${color}" style="height:12px;line-height:12px;font-size:1px">&nbsp;</td>
       <td width="${right}%"></td>
     </tr></table>`;
   };
   const rows = visibleTaskRows(project)
-    .map(({ task, depth }) => `<tr>
-      <td style="padding:4px;border:1px solid #c5d0d8;white-space:nowrap">${depth ? "— " : ""}${esc(task.name)}</td>
-      <td style="padding:4px;border:1px solid #c5d0d8;width:72%">
-        ${barRow(task.baseStart, task.baseEnd, "#cbd5e1")}
-        ${barRow(planStart(task), planEnd(task), task.critical ? "#b45309" : "#0f766e")}
-        ${barRow(actualBarStart(task), actualBarEnd(task), "#2563eb")}
-      </td>
-    </tr>`)
+    .map(({ task, depth }) => {
+      const start = planStart(task);
+      const end = planEnd(task);
+      return `<tr>
+        <td style="padding:5px;border:1px solid #c5d0d8">${depth ? "— " : ""}${esc(task.name)}</td>
+        <td style="padding:5px;border:1px solid #c5d0d8;white-space:nowrap">${fmtDate(start)} → ${fmtDate(end)}</td>
+        <td style="padding:5px;border:1px solid #c5d0d8;width:55%">${barCell(start, end, task.critical ? "#b45309" : "#0f766e")}</td>
+      </tr>`;
+    })
     .join("");
   return `<h3>${esc(tr("gantt"))}</h3>
     <p>${fmtDate(iso(min))} → ${fmtDate(iso(max))}</p>
-    <p style="font-size:11px">${esc(tr("baseline"))} · ${esc(tr("planned"))} · ${esc(tr("actual"))}</p>
-    <table width="100%" cellpadding="0" cellspacing="0">${rows}</table>`;
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <th style="padding:5px;border:1px solid #c5d0d8;text-align:start">${esc(tr("taskName"))}</th>
+        <th style="padding:5px;border:1px solid #c5d0d8;text-align:start">${esc(tr("plannedStart"))} / ${esc(tr("plannedEnd"))}</th>
+        <th style="padding:5px;border:1px solid #c5d0d8;text-align:start">${esc(tr("gantt"))}</th>
+      </tr>
+      ${rows}
+    </table>`;
 }
 
 function reportEmailHtml(project, pdfUrl) {
@@ -3181,39 +3188,40 @@ function buildReportCaptureEl(project) {
   const wrap = document.createElement("div");
   wrap.className = "pdf-report-root";
   wrap.setAttribute("dir", state.lang === "ar" ? "rtl" : "ltr");
-  wrap.innerHTML = `${reportCoverHtml(project)}
-    <section class="print-sheet pdf-tasks-sheet">
-      <h3>${esc(tr("reportTasksPage"))}</h3>
-      <div class="card table-scroll report-table-wrap" style="padding:8px 16px">
-        ${reportTasksOnlyTable(project, state.reportShowSubs)}
-      </div>
-    </section>
-    <section class="print-sheet pdf-gantt-sheet">
-      <h3>${esc(tr("gantt"))}</h3>
-      <div class="card gantt-wrap report-gantt">${ganttHtml(project, { compact: true, width: state.printOrient === "landscape" ? 980 : 670 })}</div>
-    </section>`;
+  wrap.innerHTML = reportEmailHtml(project, "");
   document.body.appendChild(wrap);
+  wrap.offsetHeight;
   return wrap;
 }
 
 function captureReportPdfBlob(project) {
   return loadHtml2Pdf().then(() => {
     const root = buildReportCaptureEl(project);
-    const orient = state.printOrient === "landscape" ? "landscape" : "portrait";
-    return new Promise((resolve) => setTimeout(resolve, 80))
+    return new Promise((resolve) => setTimeout(resolve, 250))
       .then(() =>
         window
           .html2pdf()
           .set({
-            margin: [8, 8, 8, 8],
-            image: { type: "jpeg", quality: 0.84 },
-            html2canvas: { scale: 1.4, useCORS: true, logging: false, windowWidth: 1200, scrollY: 0 },
-            jsPDF: { unit: "mm", format: "a4", orientation: orient },
-            pagebreak: { mode: ["css", "legacy"] }
+            margin: [10, 10, 10, 10],
+            image: { type: "jpeg", quality: 0.92 },
+            html2canvas: {
+              scale: 2,
+              useCORS: true,
+              logging: false,
+              backgroundColor: "#ffffff",
+              windowWidth: 900,
+              scrollX: 0,
+              scrollY: 0
+            },
+            jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
           })
           .from(root)
           .outputPdf("blob")
       )
+      .then((blob) => {
+        if (!blob || blob.size < 2000) throw new Error("pdf");
+        return blob;
+      })
       .finally(() => root.remove());
   });
 }
