@@ -1,6 +1,23 @@
 const FOLDER_NAME = "Bahja-PM";
 const DATA_NAME = "project_data.json";
+const QUEUE_NAME = "mail_queue.json";
 const SECRET = "bahja-2026-pm";
+
+/**
+ * شغّل هذه الدالة مرة واحدة من المحرر: Run ▶ AUTHORIZE
+ * ثم اسمح بالبريد (Gmail). بعدها Deploy → New version.
+ */
+function AUTHORIZE() {
+  MailApp.getRemainingDailyQuota();
+  processMailQueue();
+  var has = false;
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === "processMailQueue") has = true;
+  });
+  if (!has) {
+    ScriptApp.newTrigger("processMailQueue").timeBased().everyMinutes(1).create();
+  }
+}
 
 function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
@@ -109,26 +126,92 @@ function emailReport_(body) {
       .map(function (s) { return s.trim(); })
       .filter(function (s) { return s.indexOf("@") > 0; });
     if (!to.length) return json_({ ok: false, error: "to" });
-    const subject = String(body.subject || "Report");
-    const html = String(body.html || "");
-    const attachments = [];
-    try {
-      const pdf = reportPdf_(body, subject);
-      if (pdf) attachments.push(pdf);
-    } catch (pdfErr) {
-      attachments.push(Utilities.newBlob(html || subject, MimeType.HTML, subject.slice(0, 80) + ".html"));
-    }
-    MailApp.sendEmail({
+    const job = {
       to: to.join(","),
-      subject: subject,
-      htmlBody: html || subject,
-      name: "Al-Bahja PM",
-      attachments: attachments
-    });
-    return json_({ ok: true });
+      subject: String(body.subject || "Report"),
+      html: String(body.html || ""),
+      title: String(body.title || ""),
+      dir: body.dir || "rtl",
+      infoTitle: body.infoTitle || "",
+      kpiTitle: body.kpiTitle || "",
+      taskTitle: body.taskTitle || "",
+      infoRows: body.infoRows || [],
+      kpiRows: body.kpiRows || [],
+      taskHead: body.taskHead || [],
+      taskRows: body.taskRows || []
+    };
+    try {
+      sendMailJob_(job);
+      return json_({ ok: true });
+    } catch (sendErr) {
+      queueMail_(job);
+      return json_({ ok: false, error: "mail-auth", detail: String(sendErr && sendErr.message ? sendErr.message : sendErr) });
+    }
   } catch (err) {
     return json_({ ok: false, error: String(err && err.message ? err.message : err) });
   }
+}
+
+function sendMailJob_(job) {
+  const subject = String(job.subject || "Report");
+  const html = String(job.html || subject);
+  const attachments = [];
+  try {
+    const pdf = reportPdf_(job, subject);
+    if (pdf) attachments.push(pdf);
+  } catch (pdfErr) {
+    attachments.push(Utilities.newBlob(html, MimeType.HTML, subject.slice(0, 80) + ".html"));
+  }
+  MailApp.sendEmail({
+    to: job.to,
+    subject: subject,
+    htmlBody: html,
+    name: "Al-Bahja PM",
+    attachments: attachments
+  });
+}
+
+function queueMail_(job) {
+  const store = ensureStore_();
+  const files = store.folder.getFilesByName(QUEUE_NAME);
+  var list = [];
+  var file = null;
+  if (files.hasNext()) {
+    file = files.next();
+    try {
+      list = JSON.parse(file.getBlob().getDataAsString() || "[]");
+    } catch (err) {
+      list = [];
+    }
+  }
+  if (!Array.isArray(list)) list = [];
+  list.push(job);
+  const text = JSON.stringify(list);
+  if (file) file.setContent(text);
+  else store.folder.createFile(QUEUE_NAME, text, MimeType.PLAIN_TEXT);
+}
+
+function processMailQueue() {
+  const store = ensureStore_();
+  const files = store.folder.getFilesByName(QUEUE_NAME);
+  if (!files.hasNext()) return;
+  const file = files.next();
+  var list = [];
+  try {
+    list = JSON.parse(file.getBlob().getDataAsString() || "[]");
+  } catch (err) {
+    list = [];
+  }
+  if (!Array.isArray(list) || !list.length) return;
+  const left = [];
+  list.forEach(function (job) {
+    try {
+      sendMailJob_(job);
+    } catch (err) {
+      left.push(job);
+    }
+  });
+  file.setContent(JSON.stringify(left));
 }
 
 function reportPdf_(body, title) {

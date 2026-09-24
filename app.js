@@ -221,7 +221,8 @@ const I18N = {
     sendPdfOk: "تم إرسال التقرير كملف PDF.",
     sendPdfFail: "تعذر إرسال التقرير.",
     remainingDays: "الأيام المتبقية",
-    sendPdfNeedDeploy: "لم يُرسل التقرير. افتح سكربت جوجل (Bahja-PM) والصق ملف gas/Code.gs ثم Deploy → Manage deployments → Edit → New version، واسمح بصلاحية Gmail.",
+    sendPdfNeedMailAuth: "التقرير لم يُرسل بعد. في سكربت جوجل اختر الدالة AUTHORIZE ثم Run واسمح بالبريد. بعد الموافقة Deploy → New version، ثم أعد الإرسال.",
+    sendPdfNeedDeploy: "لم يُرسل التقرير. الصق gas/Code.gs في سكربت جوجل ثم Deploy إصدار جديد.",
     sendPdfNeedEmail: "لا يوجد بريد إلكتروني صالح.",
     sendPdfWait: "جاري إرسال التقرير…",
     holidays: "العطل الرسمية",
@@ -459,7 +460,8 @@ const I18N = {
     sendPdfOk: "The report PDF was sent.",
     sendPdfFail: "Could not send the report.",
     remainingDays: "Remaining days",
-    sendPdfNeedDeploy: "The report was not sent. Open the Bahja-PM Google Script, paste gas/Code.gs, then Deploy → Manage deployments → Edit → New version, and allow Gmail access.",
+    sendPdfNeedMailAuth: "The report is not sent yet. In the Google Script choose AUTHORIZE, click Run, and allow Gmail. Then Deploy → New version, and send again.",
+    sendPdfNeedDeploy: "The report was not sent. Paste gas/Code.gs into the Google Script, then Deploy a new version.",
     sendPdfNeedEmail: "No valid email address.",
     sendPdfWait: "Sending the report…",
     holidays: "Official holidays",
@@ -3087,6 +3089,10 @@ function sendReportPdf(project, toValue) {
     .then(() => showToast(tr("sendPdfOk")))
     .catch((err) => {
       const msg = String((err && err.message) || err || "");
+      if (msg === "mail-auth" || /MailApp|send_mail|sendEmail/i.test(msg)) {
+        alert(tr("sendPdfNeedMailAuth"));
+        return;
+      }
       alert(msg === "action" || msg === "bridge" ? tr("sendPdfNeedDeploy") : tr("sendPdfFail") + (msg ? "\n" + msg : ""));
     });
 }
