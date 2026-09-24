@@ -1417,11 +1417,13 @@ function projectView() {
             ${isPm() ? `<button class="btn" data-info>${tr("edit")}</button>` : ""}
           </div>
           <table class="info-table">
+            <tbody>
             <tr><th>${tr("projectName")}</th><td>${esc(project.name)}</td></tr>
             <tr><th>${tr("hospital")}</th><td>${esc(project.hospital || "")}</td></tr>
             <tr><th>${tr("location")}</th><td>${esc(project.location || "")}</td></tr>
             <tr><th>${tr("device")}</th><td>${esc(deviceLabel(project.device))}</td></tr>
             ${extraRows}
+            </tbody>
           </table>
         </section>
         <section class="project-panel${tab === "gantt" ? " is-on" : ""}" data-panel="gantt">
@@ -1452,7 +1454,7 @@ function projectView() {
                 <th>${tr("plannedCost")}</th><th>${tr("actualCost")}</th>
                 ${isPm() ? "<th></th>" : ""}
               </tr></thead>
-              <tbody></tbody>
+              <tbody data-tasks-body></tbody>
             </table>
           </div>
         </section>
@@ -1465,7 +1467,7 @@ function projectView() {
         </section>
     </div>
   </div>`);
-  const tbody = box.querySelector("tbody");
+  const tbody = box.querySelector("[data-tasks-body]");
   if (tbody) {
     visibleTaskRows(project).forEach((rowInfo) => {
       const label = rowInfo.depth ? `${rowInfo.parent ? project.tasks.indexOf(rowInfo.parent) + 1 : ""}.${rowInfo.index + 1}` : String(rowInfo.index + 1);
