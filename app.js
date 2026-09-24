@@ -948,7 +948,7 @@ const state = {
   projectId: null,
   reportProjectId: "all",
   reportShowSubs: true,
-  reportShowGantt: false,
+  reportShowGantt: true,
   printFit: "auto",
   modal: null,
   expanded: {},
@@ -1211,33 +1211,53 @@ function loginView() {
 }
 
 function shellView(user) {
-  const wrap = el(`<div>
-    <header class="topbar">
-      <div class="brand">
+  const onProject = state.view === "project";
+  const project = onProject ? (state.data.projects || []).find((p) => p.id === state.projectId) : null;
+  const tab = state.projectTab || "gantt";
+  const goOn = (id) => (state.view === id ? " is-on" : "");
+  const wrap = el(`<div class="app-frame">
+    <aside class="app-side no-print">
+      <div class="brand side-brand">
         <div class="logo">PM</div>
         <div>
           <strong>${tr("app")}</strong>
-          <div class="muted">${tr("welcome")} ${esc(user.name)}</div>
+          <div class="muted">${esc(user.name)}</div>
         </div>
       </div>
-      <nav class="nav">
-        <button class="btn secondary" data-go="projects">${tr("projects")}</button>
-        <button class="btn secondary" data-go="reports">${tr("reports")}</button>
-        ${isCompanyPm() ? `<button class="btn secondary" data-go="users">${tr("users")}</button>` : ""}
-        <button class="btn secondary" data-go="profile">${tr("profile")}</button>
-        <button class="btn ghost" data-lang>${tr("lang")}</button>
-        <button class="btn ghost" data-out>${tr("logout")}</button>
+      <nav class="app-nav">
+        <button class="side-link${goOn("projects")}" type="button" data-go="projects">${tr("projects")}</button>
+        <button class="side-link${goOn("reports")}" type="button" data-go="reports">${tr("reports")}</button>
+        ${isCompanyPm() ? `<button class="side-link${goOn("users")}" type="button" data-go="users">${tr("users")}</button>` : ""}
+        <button class="side-link${goOn("profile")}" type="button" data-go="profile">${tr("profile")}</button>
       </nav>
-    </header>
-    <main class="page"></main>
+      ${project ? `<div class="side-group">
+        <div class="side-group-title">${esc(project.name)}</div>
+        <button class="side-link${tab === "overview" ? " is-on" : ""}" type="button" data-ptab="overview">${tr("tabOverview")}</button>
+        <button class="side-link${tab === "info" ? " is-on" : ""}" type="button" data-ptab="info">${tr("tabInfo")}</button>
+        <button class="side-link${tab === "gantt" ? " is-on" : ""}" type="button" data-ptab="gantt">${tr("tabGantt")}</button>
+        <button class="side-link${tab === "tasks" ? " is-on" : ""}" type="button" data-ptab="tasks">${tr("tabTasks")}</button>
+        <button class="side-link${tab === "files" ? " is-on" : ""}" type="button" data-ptab="files">${tr("tabFiles")}</button>
+      </div>` : ""}
+      <div class="side-foot">
+        <button class="side-link" type="button" data-lang>${tr("lang")}</button>
+        <button class="side-link" type="button" data-out>${tr("logout")}</button>
+      </div>
+    </aside>
+    <div class="app-content">
+      <main class="page"></main>
+    </div>
   </div>`);
   wrap.querySelectorAll("[data-go]").forEach((b) => {
-    if (b.dataset.go === state.view || (state.view === "project" && b.dataset.go === "projects")) {
-      b.setAttribute("aria-current", "page");
-    }
     b.onclick = () => {
       state.view = b.dataset.go;
       if (b.dataset.go === "projects") state.projectId = null;
+      render();
+    };
+  });
+  wrap.querySelectorAll("[data-ptab]").forEach((b) => {
+    b.onclick = () => {
+      state.view = "project";
+      state.projectTab = b.getAttribute("data-ptab");
       render();
     };
   });
@@ -1258,7 +1278,6 @@ function shellView(user) {
   if (state.modal) main.append(state.modal);
   return wrap;
 }
-
 function projectsView() {
   const box = el(`<div>
     <h2>${tr("summary")}</h2>
@@ -1362,8 +1381,6 @@ function projectView() {
   computeCritical(project);
   const s = projectStats(project);
   const tab = state.projectTab || "gantt";
-  const sideBtn = (id, label) =>
-    `<button class="side-link${tab === id ? " is-on" : ""}" type="button" data-tab="${id}">${label}</button>`;
   const extraRows = (project.extra || [])
     .filter((x) => extraLabel(x))
     .map((x) => `<tr><th>${esc(extraLabel(x))}</th><td>${esc(x.value || "—")}</td></tr>`)
@@ -1382,15 +1399,7 @@ function projectView() {
         <button class="btn danger" data-delp>${tr("delete")}</button>` : ""}
       </div>
     </div>
-    <div class="project-layout">
-      <aside class="project-side no-print">
-        ${sideBtn("overview", tr("tabOverview"))}
-        ${sideBtn("info", tr("tabInfo"))}
-        ${sideBtn("gantt", tr("tabGantt"))}
-        ${sideBtn("tasks", tr("tabTasks"))}
-        ${sideBtn("files", tr("tabFiles"))}
-      </aside>
-      <div class="project-main">
+    <div class="project-main">
         <section class="project-panel${tab === "overview" ? " is-on" : ""}" data-panel="overview">
           <h3>${tr("overallProgress")}</h3>
           <div class="kpis">
@@ -1454,7 +1463,6 @@ function projectView() {
           </div>
           <p class="muted">${fileCount ? fileCount : tr("noFiles")}</p>
         </section>
-      </div>
     </div>
   </div>`);
   const tbody = box.querySelector("tbody");
@@ -1465,12 +1473,6 @@ function projectView() {
     });
   }
   bindGanttScroll(box);
-  box.querySelectorAll("[data-tab]").forEach((btn) => {
-    btn.onclick = () => {
-      state.projectTab = btn.getAttribute("data-tab");
-      render();
-    };
-  });
   box.querySelectorAll("[data-twist]").forEach((btn) => {
     btn.onclick = (e) => {
       e.preventDefault();
@@ -1752,8 +1754,8 @@ function keyGanttDates(project) {
 function fitGanttCols(project, innerWidth) {
   const keys = keyGanttDates(project);
   if (!keys.length) return [];
-  const minDayW = 8;
-  const maxCols = Math.max(keys.length, Math.floor(Math.max(innerWidth, 240) / minDayW));
+  const minDayW = 6;
+  const maxCols = Math.max(keys.length, Math.floor(Math.max(innerWidth, 180) / minDayW));
   const all = enumerateDays(keys[0], keys[keys.length - 1]);
   const keyMs = new Set(keys.map((d) => d.getTime()));
   const keep = new Set(keyMs);
@@ -1774,10 +1776,8 @@ function fitGanttCols(project, innerWidth) {
   all.forEach((d) => {
     if (!keep.has(d.getTime())) return;
     const prev = cols[cols.length - 1];
-    if (prev && Math.round((d - prev.date) / 86400000) > 1) {
-      cols.push({ gap: true, date: prev.date });
-    }
-    cols.push({ gap: false, date: d });
+    const skipped = prev && Math.round((d - prev.date) / 86400000) > 1;
+    cols.push({ gap: !!skipped, date: d });
   });
   return cols;
 }
@@ -1788,7 +1788,6 @@ function ganttColIndex(cols, isoDate) {
   const ms = t.getTime();
   let best = null;
   for (let i = 0; i < cols.length; i++) {
-    if (cols[i].gap) continue;
     const ct = cols[i].date.getTime();
     if (ct === ms) return i;
     if (ct <= ms) best = i;
@@ -1799,8 +1798,13 @@ function ganttColIndex(cols, isoDate) {
 function ganttHtml(project, opts) {
   computeCritical(project);
   const compact = !!(opts && opts.compact);
-  const targetW = Number(opts && opts.width) || 980;
-  const sparse = compact ? fitGanttCols(project, Math.max(240, targetW - 160)) : null;
+  const targetW = Number(opts && opts.width) || (compact ? 670 : 980);
+  const nameW = compact ? 110 : (window.matchMedia("(max-width: 800px)").matches ? 110 : 220);
+  const hideDates = compact || window.matchMedia("(max-width: 800px)").matches;
+  const dateW = hideDates ? 0 : 132;
+  const lockW = nameW + (hideDates ? 0 : dateW * 2);
+  const inner = Math.max(180, targetW - lockW);
+  const sparse = compact ? fitGanttCols(project, inner) : null;
   const cols = sparse && sparse.length ? sparse : null;
   const dates = cols && cols.length ? cols.map((c) => c.date) : collectDates(project);
   if (!dates.length) return `<p class="muted">—</p>`;
@@ -1808,14 +1812,8 @@ function ganttHtml(project, opts) {
   const max = cols ? cols[cols.length - 1].date : new Date(Math.max(...dates));
   const days = cols ? cols.map((c) => c.date) : enumerateDays(min, max);
   const mobile = window.matchMedia("(max-width: 800px)").matches;
-  const hideDates = compact || mobile;
-  const nameW = compact ? 140 : mobile ? 110 : 220;
-  const dateW = hideDates ? 0 : 132;
-  const colCount = days.length;
-  const lockW = nameW + (hideDates ? 0 : dateW * 2);
-  const dayW = compact
-    ? Math.max(8, Math.min(16, Math.floor((targetW - lockW) / Math.max(colCount, 1))))
-    : mobile ? 14 : 16;
+  const colCount = Math.max(days.length, 1);
+  const dayW = compact ? Math.max(6, Math.floor(inner / colCount)) : mobile ? 14 : 16;
   const rowH = mobile ? 28 : 24;
   const headH = 48;
   const scaleW = colCount * dayW;
@@ -1836,7 +1834,9 @@ function ganttHtml(project, opts) {
     .join("");
   const dayBand = days
     .map((d, i) => {
-      if (cols && cols[i] && cols[i].gap) return `<span class="gantt-day gantt-gap">··</span>`;
+      if (cols && cols[i] && cols[i].gap) {
+        return `<span class="gantt-day gantt-gap" title="${fmtDate(iso(d))}">${pad2(d.getDate())}</span>`;
+      }
       const weekend = d.getDay() === 0 || d.getDay() === 6 ? " weekend" : "";
       const monthStart = monthStarts.has(i) ? " month-start" : "";
       return `<span class="gantt-day${weekend}${monthStart}">${pad2(d.getDate())}</span>`;
@@ -1931,7 +1931,7 @@ function ganttHtml(project, opts) {
     ? `<svg class="gantt-links" width="${lockW + scaleW}" height="${svgH}" viewBox="0 0 ${lockW + scaleW} ${svgH}" preserveAspectRatio="none">${links.join("")}</svg>`
     : "";
 
-  return `<div class="gantt${compact ? " gantt-compact" : ""}" style="--day-w:${dayW}px;--name-w:${nameW}px;--date-w:${dateW}px;--lock-w:${lockW}px">
+  return `<div class="gantt${compact ? " gantt-compact" : ""}" style="--day-w:${dayW}px;--name-w:${nameW}px;--date-w:${dateW}px;--lock-w:${lockW}px;width:${lockW + scaleW}px;max-width:100%">
     <div class="gantt-scroll">
       <div class="gantt-head">
         <div class="gantt-sticky-name">
@@ -2378,38 +2378,17 @@ function reportTable(projects, withTasks, showSubs) {
 function printReport() {
   const pages = state.printFit;
   const root = document.documentElement;
-  const ganttBox = document.querySelector(".report-gantt .gantt");
-  const reset = () => {
-    root.style.setProperty("--print-zoom", "1");
-    if (ganttBox) {
-      ganttBox.style.transform = "";
-      ganttBox.style.transformOrigin = "";
-    }
-  };
+  const reset = () => root.style.setProperty("--print-zoom", "1");
   reset();
-  if (ganttBox) {
-    const w = Math.max(ganttBox.scrollWidth, ganttBox.offsetWidth, 1);
-    const maxW = 980;
-    if (w > maxW) {
-      const s = maxW / w;
-      ganttBox.style.transform = `scale(${s})`;
-      ganttBox.style.transformOrigin = "top left";
-    }
-  }
-  if (!pages || pages === "auto") {
+  if (!pages || pages === "auto" || state.lang === "ar") {
     window.print();
-    const done = () => {
-      reset();
-      window.removeEventListener("afterprint", done);
-    };
-    window.addEventListener("afterprint", done);
     return;
   }
   const report = document.querySelector(".report-page") || document.querySelector(".page");
   const pageH = 980;
   const h = Math.max(report ? report.scrollHeight : 1, 1);
   const zoom = Math.min(1, Math.max(0.45, (Number(pages) * pageH) / h));
-  if (state.lang !== "ar") root.style.setProperty("--print-zoom", String(zoom));
+  root.style.setProperty("--print-zoom", String(zoom));
   const done = () => {
     reset();
     window.removeEventListener("afterprint", done);
@@ -2462,9 +2441,9 @@ function reportsView() {
         ${reportTable(list, !!single, state.reportShowSubs)}
       </div>
     </section>
-    ${single && state.reportShowGantt ? `<section class="report-gantt-page print-sheet">
+    ${single ? `<section class="report-gantt-page print-sheet">
       <h3>${tr("gantt")}</h3>
-      <div class="card gantt-wrap report-gantt">${ganttHtml(list[0], { compact: true, width: 980 })}</div>
+      <div class="card gantt-wrap report-gantt">${ganttHtml(list[0], { compact: true, width: 670 })}</div>
     </section>` : ""}
   </div>`);
   const sel = box.querySelector("select[name=which]");
