@@ -1715,18 +1715,20 @@ function projectView() {
         </section>` : tab === "gantt" ? `<section class="project-panel is-on" data-panel="gantt">
           <h3>${tr("gantt")}</h3>
           <p class="hint gantt-hint no-print">${tr("ganttSwipe")}</p>
-          <div class="legend">
-            <span><i class="swatch baseline"></i>${tr("baseline")}</span>
-            <span><i class="swatch planned"></i>${tr("planned")}</span>
-            <span><i class="swatch actual"></i>${tr("actual")}</span>
-            <span><i class="swatch critical"></i>${tr("critical")}</span>
-            <span><i class="swatch milestone"></i>${tr("milestone")}</span>
-          </div>
-          <div class="gantt-opts no-print">
-            <label class="chk"><input type="checkbox" data-gantt-opt="ganttRowLines" ${state.ganttRowLines ? "checked" : ""}> ${tr("ganttRowLines")}</label>
-            <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowWeekends" ${state.ganttShowWeekends ? "checked" : ""}> ${tr("ganttShowWeekends")}</label>
-            <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowPlan" ${state.ganttShowPlan ? "checked" : ""}> ${tr("ganttShowPlan")}</label>
-            <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowActual" ${state.ganttShowActual ? "checked" : ""}> ${tr("ganttShowActual")}</label>
+          <div class="gantt-toolbar no-print">
+            <div class="legend">
+              <span><i class="swatch baseline"></i>${tr("baseline")}</span>
+              <span><i class="swatch planned"></i>${tr("planned")}</span>
+              <span><i class="swatch actual"></i>${tr("actual")}</span>
+              <span><i class="swatch critical"></i>${tr("critical")}</span>
+              <span><i class="swatch milestone"></i>${tr("milestone")}</span>
+            </div>
+            <div class="gantt-opts">
+              <label class="chk"><input type="checkbox" data-gantt-opt="ganttRowLines" ${state.ganttRowLines ? "checked" : ""}> ${tr("ganttRowLines")}</label>
+              <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowWeekends" ${state.ganttShowWeekends ? "checked" : ""}> ${tr("ganttShowWeekends")}</label>
+              <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowPlan" ${state.ganttShowPlan ? "checked" : ""}> ${tr("ganttShowPlan")}</label>
+              <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowActual" ${state.ganttShowActual ? "checked" : ""}> ${tr("ganttShowActual")}</label>
+            </div>
           </div>
           <div class="card gantt-wrap">${ganttHtml(project)}</div>
         </section>` : tab === "files" ? `<section class="project-panel is-on" data-panel="files">
@@ -2114,8 +2116,6 @@ function ganttHtml(project, opts) {
   const showPlanCol = !compact && !mobile && !!state.ganttShowPlan;
   const showActCol = !compact && !mobile && !!state.ganttShowActual;
   const showWeekends = state.ganttShowWeekends !== false;
-  const showPlanBar = compact || state.ganttShowPlan !== false;
-  const showActBar = compact || state.ganttShowActual !== false;
   const dateW = 132;
   const planW = showPlanCol ? dateW : 0;
   const actW = showActCol ? dateW : 0;
@@ -2205,14 +2205,10 @@ function ganttHtml(project, opts) {
       const count = kids && !expanded ? `<span class="sub-count">${task.children.length}</span>` : "";
       const msIcon = task.milestone ? `<span class="ms-tag">◆</span>` : "";
       const planCls = `planned${task.critical ? " critical" : ""}${kids ? " summary" : ""}`;
-      const planBar = !showPlanBar
-        ? ""
-        : task.milestone
+      const planBar = task.milestone
         ? diamondHtml(planStart(task) || planEnd(task), `plan${task.critical ? " critical" : ""}`)
         : barHtml(planStart(task), planEnd(task), planCls, Number(task.percent || 0));
-      const actBar = !showActBar
-        ? ""
-        : task.milestone
+      const actBar = task.milestone
         ? diamondHtml(task.actualStart || task.actualEnd, "act")
         : barHtml(actualBarStart(task), actualBarEnd(task), "actual");
       return `<div class="gantt-row ${depth ? "sub" : ""} ${task.critical ? "is-critical" : ""}">
