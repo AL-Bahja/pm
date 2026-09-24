@@ -60,16 +60,16 @@ const I18N = {
     actual: "فعلي",
     baseline: "خط الأساس",
     setBaseline: "تحديث خط الأساس",
-    baselineSaved: "تم نسخ التواريخ المتوقعة إلى خط الأساس. الجدول المتوقع لم يُمسح.",
-    baselineConfirm: "سيتم استبدال خط الأساس بالتواريخ المتوقعة الحالية. الجدول المتوقع والحقيقي لن يُمسحا.",
-    baselineNoPlan: "لا توجد تواريخ متوقعة لنسخها. لم يُغيَّر خط الأساس حتى لا يُمسح.",
+    baselineSaved: "تم التحديث: المتوقع الفارغ أصبح مثل خط الأساس، والمتوقع الموجود نُسخ إلى خط الأساس.",
+    baselineConfirm: "عند التحديث: إن كان المتوقع فارغاً يُملأ من خط الأساس. إن كان موجوداً يُنسخ إلى خط الأساس. التواريخ الحقيقية لا تُمسح.",
+    baselineNoPlan: "لا توجد تواريخ متوقعة ولا خط أساس لهذه المهام.",
     resetDates: "إعادة ضبط التواريخ",
     resetDatesConfirm: "سيتم استبدال التواريخ المتوقعة بخط الأساس، ومسح التواريخ الحقيقية. خط الأساس يبقى كما هو.",
     resetDatesOk: "عُدّل الجدول المتوقع ليطابق خط الأساس، ومُسحت التواريخ الحقيقية.",
     milestone: "حدث هام",
     baseStart: "بداية خط الأساس",
     baseEnd: "نهاية خط الأساس",
-    baselineHint: "«تحديث خط الأساس» ينسخ المتوقع إلى خط الأساس دون مسح المتوقع. «إعادة ضبط التواريخ» تجعل المتوقع يطابق خط الأساس وتمسح الحقيقي.",
+    baselineHint: "عند «تحديث خط الأساس»: المتوقع الفارغ يصبح مثل خط الأساس، والمتوقع الموجود يُنسخ إلى خط الأساس.",
     predecessors: "الاعتماديات (Predecessors)",
     predType: "النوع",
     lag: "التأخير/التقديم (أيام)",
@@ -238,16 +238,16 @@ const I18N = {
     actual: "Actual",
     baseline: "Baseline",
     setBaseline: "Update baseline",
-    baselineSaved: "Baseline copied from the current planned dates. Planned dates were not cleared.",
-    baselineConfirm: "Baseline will be replaced by the current planned dates. Planned and actual dates will not be cleared.",
-    baselineNoPlan: "There are no planned dates to copy. Baseline was not changed, so it is not wiped.",
+    baselineSaved: "Updated: empty planned dates were filled from the baseline, and existing planned dates were copied to the baseline.",
+    baselineConfirm: "On update: empty planned dates are filled from the baseline. Existing planned dates are copied to the baseline. Actual dates are not cleared.",
+    baselineNoPlan: "There are no planned dates and no baseline for these tasks.",
     resetDates: "Reset dates",
     resetDatesConfirm: "Planned dates will be replaced by the baseline, and actual dates will be cleared. Baseline stays as it is.",
     resetDatesOk: "Planned dates now match the baseline. Actual dates were cleared.",
     milestone: "Key event",
     baseStart: "Baseline start",
     baseEnd: "Baseline end",
-    baselineHint: "Update baseline copies planned dates onto the baseline without clearing the plan. Reset dates makes planned dates match the baseline and clears actual dates.",
+    baselineHint: "On Update baseline: empty planned dates become the baseline, and existing planned dates are copied onto the baseline.",
     predecessors: "Predecessors",
     predType: "Type",
     lag: "Lag / lead (days)",
@@ -412,12 +412,6 @@ function planEnd(task) {
   return (task && (task.plannedEnd || task.baseEnd || planStart(task))) || "";
 }
 
-function fillEmptyPlanFromBaseline(task) {
-  (task.children || []).forEach(fillEmptyPlanFromBaseline);
-  if (!task.plannedStart) task.plannedStart = task.baseStart || "";
-  if (!task.plannedEnd) task.plannedEnd = task.baseEnd || task.plannedStart || "";
-}
-
 function fmtDate(d) {
   const dt = parseDay(d);
   if (!dt) return "—";
@@ -453,7 +447,6 @@ function rollupTask(task) {
 }
 
 function rollupProject(project) {
-  (project.tasks || []).forEach(fillEmptyPlanFromBaseline);
   (project.tasks || []).forEach(rollupTask);
   return project;
 }
@@ -499,8 +492,6 @@ function migrateTask(task) {
     task.percent = task.status === "done" ? 100 : task.status === "in_progress" ? 50 : 0;
   }
   task.children.forEach(migrateTask);
-  if (!task.plannedStart) task.plannedStart = task.baseStart || "";
-  if (!task.plannedEnd) task.plannedEnd = task.baseEnd || task.plannedStart || "";
 }
 
 function predText(task, project) {
@@ -518,7 +509,6 @@ function predText(task, project) {
 }
 
 function applyDependencies(project) {
-  (project.tasks || []).forEach(fillEmptyPlanFromBaseline);
   const list = flattenTasks(project);
   const byId = Object.fromEntries(list.map((t) => [t.id, t]));
   for (let n = 0; n < 30; n++) {
@@ -604,14 +594,21 @@ function computeCritical(project) {
 }
 
 function setProjectBaseline(project) {
-  let copied = 0;
+  let n = 0;
   flattenTasks(project).forEach((t) => {
-    if (!t.plannedStart && !t.plannedEnd) return;
-    if (t.plannedStart) t.baseStart = t.plannedStart;
-    t.baseEnd = t.plannedEnd || t.plannedStart || t.baseEnd || "";
-    copied += 1;
+    const hasPlan = !!(t.plannedStart || t.plannedEnd);
+    const hasBase = !!(t.baseStart || t.baseEnd);
+    if (hasPlan) {
+      if (t.plannedStart) t.baseStart = t.plannedStart;
+      t.baseEnd = t.plannedEnd || t.plannedStart || t.baseEnd || "";
+      n += 1;
+    } else if (hasBase) {
+      t.plannedStart = t.baseStart || "";
+      t.plannedEnd = t.baseEnd || t.plannedStart || "";
+      n += 1;
+    }
   });
-  return copied;
+  return n;
 }
 
 function resetDatesKeepBaseline(project) {
