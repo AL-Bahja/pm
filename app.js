@@ -109,6 +109,13 @@ const I18N = {
     tabTasks: "المهام",
     tabInfo: "معلومات المشروع",
     tabFiles: "المرفقات",
+    pageTheme: "لون الصفحة",
+    themeTeal: "أخضر بحري",
+    themeNavy: "أزرق",
+    themeSand: "رملي",
+    themeForest: "أخضر غامق",
+    themeRose: "عنابي",
+    themeSlate: "رمادي",
     deviceScope: "قسم الجهاز",
     allDevices: "كل الأجهزة",
     addDevice: "إضافة نوع جهاز",
@@ -300,6 +307,13 @@ const I18N = {
     tabTasks: "Tasks",
     tabInfo: "Project information",
     tabFiles: "Attachments",
+    pageTheme: "Page color",
+    themeTeal: "Teal",
+    themeNavy: "Navy",
+    themeSand: "Sand",
+    themeForest: "Forest",
+    themeRose: "Burgundy",
+    themeSlate: "Slate",
     deviceScope: "Device department",
     allDevices: "All devices",
     addDevice: "Add device type",
@@ -384,6 +398,7 @@ const I18N = {
 };
 
 const KEY = "med-install-pm-v2";
+const THEME_IDS = ["teal", "navy", "sand", "forest", "rose", "slate"];
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -952,7 +967,8 @@ const state = {
   printFit: "auto",
   modal: null,
   expanded: {},
-  projectTab: "gantt",
+  projectTab: "info",
+  theme: localStorage.getItem(KEY + "-theme") || "teal",
   driveReady: false,
   driveSaving: false,
   driveError: "",
@@ -1066,7 +1082,29 @@ function money(n) {
   return Number(n || 0).toLocaleString(state.lang === "ar" ? "ar-IQ" : "en-US");
 }
 
+function applyTheme() {
+  const u = currentUser();
+  if (u && THEME_IDS.includes(u.theme)) state.theme = u.theme;
+  const id = THEME_IDS.includes(state.theme) ? state.theme : "teal";
+  state.theme = id;
+  document.documentElement.setAttribute("data-theme", id);
+}
+
+function setTheme(id) {
+  if (!THEME_IDS.includes(id)) return;
+  state.theme = id;
+  localStorage.setItem(KEY + "-theme", id);
+  const u = currentUser();
+  if (u) {
+    u.theme = id;
+    save(state.data, false, true);
+  }
+  applyTheme();
+  render();
+}
+
 function render() {
+  applyTheme();
   document.documentElement.lang = state.lang;
   document.documentElement.dir = state.lang === "ar" ? "rtl" : "ltr";
   document.title = tr("app");
@@ -1213,7 +1251,7 @@ function loginView() {
 function shellView(user) {
   const onProject = state.view === "project";
   const project = onProject ? (state.data.projects || []).find((p) => p.id === state.projectId) : null;
-  const tab = state.projectTab || "gantt";
+  const tab = state.projectTab || "info";
   const goOn = (id) => (state.view === id ? " is-on" : "");
   const wrap = el(`<div class="app-frame">
     <aside class="app-side no-print">
@@ -1231,9 +1269,9 @@ function shellView(user) {
         <button class="side-link${goOn("profile")}" type="button" data-go="profile">${tr("profile")}</button>
       </nav>
       ${project ? `<div class="side-group">
-        <div class="side-group-title">${esc(project.name)}</div>
-        <button class="side-link${tab === "overview" ? " is-on" : ""}" type="button" data-ptab="overview">${tr("tabOverview")}</button>
+        <div class="side-group-title" title="${esc(project.name)}">${esc(project.name)}</div>
         <button class="side-link${tab === "info" ? " is-on" : ""}" type="button" data-ptab="info">${tr("tabInfo")}</button>
+        <button class="side-link${tab === "overview" ? " is-on" : ""}" type="button" data-ptab="overview">${tr("tabOverview")}</button>
         <button class="side-link${tab === "gantt" ? " is-on" : ""}" type="button" data-ptab="gantt">${tr("tabGantt")}</button>
         <button class="side-link${tab === "tasks" ? " is-on" : ""}" type="button" data-ptab="tasks">${tr("tabTasks")}</button>
         <button class="side-link${tab === "files" ? " is-on" : ""}" type="button" data-ptab="files">${tr("tabFiles")}</button>
@@ -1380,12 +1418,11 @@ function projectView() {
   rollupProject(project);
   computeCritical(project);
   const s = projectStats(project);
-  const tab = state.projectTab || "gantt";
+  const tab = state.projectTab || "info";
   const extraRows = (project.extra || [])
     .filter((x) => extraLabel(x))
     .map((x) => `<tr><th>${esc(extraLabel(x))}</th><td>${esc(x.value || "—")}</td></tr>`)
     .join("");
-  const fileCount = (project.docFiles || []).length + (project.costFiles || []).length;
   const box = el(`<div>
     <div class="project-head">
       <div>
@@ -1436,11 +1473,15 @@ function projectView() {
           </div>
           <div class="card gantt-wrap">${ganttHtml(project)}</div>
         </section>` : tab === "files" ? `<section class="project-panel is-on" data-panel="files">
-          <div class="row" style="justify-content:space-between">
-            <h3>${tr("projectFiles")}</h3>
-            <button class="btn" data-files>${tr("projectFiles")}${fileCount ? ` (${fileCount})` : ""}</button>
+          <h3>${tr("projectFiles")}</h3>
+          <div class="file-folder">
+            <h4>${tr("projectDocs")}${(project.docFiles || []).length ? ` (${(project.docFiles || []).length})` : ""}</h4>
+            <div data-docs></div>
           </div>
-          <p class="muted">${fileCount ? fileCount : tr("noFiles")}</p>
+          <div class="file-folder">
+            <h4>${tr("costFiles")}${(project.costFiles || []).length ? ` (${(project.costFiles || []).length})` : ""}</h4>
+            <div data-costs></div>
+          </div>
         </section>` : `<section class="project-panel is-on" data-panel="tasks">
           <div class="row" style="margin:0 0 8px; justify-content:space-between">
             <h3>${tr("tasks")}</h3>
@@ -1482,8 +1523,12 @@ function projectView() {
   if (addt) addt.onclick = () => openTaskForm(project, null, null);
   const info = box.querySelector("[data-info]");
   if (info) info.onclick = () => openProjectForm(project);
-  const files = box.querySelector("[data-files]");
-  if (files) files.onclick = () => openProjectFiles(project);
+  if (box.querySelector("[data-docs]")) {
+    if (!project.docFiles) project.docFiles = project.files || [];
+    if (!project.costFiles) project.costFiles = [];
+    mountFileBox(box.querySelector("[data-docs]"), project.docFiles, () => save(state.data));
+    mountFileBox(box.querySelector("[data-costs]"), project.costFiles, () => save(state.data));
+  }
   const copy = box.querySelector("[data-copy]");
   if (copy) copy.onclick = () => copyProject(project);
   const base = box.querySelector("[data-base]");
@@ -2672,8 +2717,16 @@ function openDeviceForm(device) {
 
 function profileView() {
   const u = currentUser();
+  const picks = THEME_IDS.map((id) => `<button class="theme-pick${state.theme === id ? " is-on" : ""}" type="button" data-theme-id="${id}">
+      <i class="theme-dot" data-tone="${id}"></i>
+      ${tr("theme" + id[0].toUpperCase() + id.slice(1))}
+    </button>`).join("");
   const box = el(`<div>
     <h2>${tr("profile")}</h2>
+    <div class="card" style="padding:20px; max-width:560px; margin-bottom:16px">
+      <h3>${tr("pageTheme")}</h3>
+      <div class="theme-picks">${picks}</div>
+    </div>
     <form class="card" style="padding:20px; max-width:560px">
       <p class="muted">${tr("currentUser")}: ${esc(u.username)} · ${esc(roleLabel(u))}</p>
       <label>${tr("displayName")}<input name="name" value="${esc(u.name)}" ${isPm() ? "" : "disabled"}></label>
@@ -2705,6 +2758,9 @@ function profileView() {
     save(state.data);
     render();
   };
+  box.querySelectorAll("[data-theme-id]").forEach((btn) => {
+    btn.onclick = () => setTheme(btn.getAttribute("data-theme-id"));
+  });
   return box;
 }
 
