@@ -217,7 +217,7 @@ const I18N = {
     ganttShowActual: "التواريخ الفعلية",
     sendPdf: "إرسال PDF",
     sendPdfTo: "إرسال إلى",
-    sendPdfAll: "كل المستخدمين",
+    sendPdfAll: "تحديد الكل",
     sendPdfOk: "تم إرسال التقرير كملف PDF.",
     sendPdfFail: "تعذر إرسال التقرير.",
     remainingDays: "الأيام المتبقية",
@@ -458,7 +458,7 @@ const I18N = {
     ganttShowActual: "Actual dates",
     sendPdf: "Send PDF",
     sendPdfTo: "Send to",
-    sendPdfAll: "All users",
+    sendPdfAll: "Select all",
     sendPdfOk: "The report PDF was sent.",
     sendPdfFail: "Could not send the report.",
     remainingDays: "Remaining days",
@@ -2136,9 +2136,23 @@ function fmtDateShort(d) {
   return fmtDate(d);
 }
 
+function fmtDateCompact(d) {
+  const dt = parseDay(d);
+  if (!dt) return "—";
+  return `${pad2(dt.getDate())}/${pad2(dt.getMonth() + 1)}/${String(dt.getFullYear()).slice(-2)}`;
+}
+
 function dateRange(start, end) {
   if (!start && !end) return "—";
   return `${fmtDate(start)} → ${fmtDate(end)}`;
+}
+
+function dateRangeHtml(start, end, compact) {
+  if (!start && !end) return `<span class="gantt-date-text" dir="ltr">—</span>`;
+  if (compact) {
+    return `<span class="gantt-date-text" dir="ltr">${esc(fmtDateCompact(start))}<br>${esc(fmtDateCompact(end))}</span>`;
+  }
+  return `<span class="gantt-date-text" dir="ltr">${esc(dateRange(start, end))}</span>`;
 }
 
 function parseDmy(s) {
@@ -2343,7 +2357,7 @@ function ganttHtml(project, opts) {
   const showPlanCol = !!state.ganttShowPlan && (!mobile || compact);
   const showActCol = !!state.ganttShowActual && (!mobile || compact);
   const showWeekends = state.ganttShowWeekends !== false;
-  const dateW = compact ? 88 : 132;
+  const dateW = compact ? 72 : 132;
   const planW = showPlanCol ? dateW : 0;
   const actW = showActCol ? dateW : 0;
   const lockW = nameW + planW + actW;
@@ -2370,20 +2384,21 @@ function ganttHtml(project, opts) {
   });
 
   const yearBand = years
-    .map((g) => `<span class="gantt-band year" style="flex:0 0 ${g.count * dayW}px;width:${g.count * dayW}px"><span class="gantt-sticky-label">${g.date.getFullYear()}</span></span>`)
+    .map((g) => `<span class="gantt-band year" style="flex:0 0 ${g.count * dayW}px;width:${g.count * dayW}px"><span class="gantt-sticky-label" dir="ltr">${g.date.getFullYear()}</span></span>`)
     .join("");
   const monthBand = months
-    .map((g) => `<span class="gantt-band month" style="flex:0 0 ${g.count * dayW}px;width:${g.count * dayW}px"><span class="gantt-sticky-label">${pad2(g.date.getMonth() + 1)}</span></span>`)
+    .map((g) => `<span class="gantt-band month" style="flex:0 0 ${g.count * dayW}px;width:${g.count * dayW}px"><span class="gantt-sticky-label" dir="ltr">${pad2(g.date.getMonth() + 1)}</span></span>`)
     .join("");
   const dayBand = days
     .map((d, i) => {
+      const dayLabel = dayW >= 14 ? pad2(d.getDate()) : "";
       if (cols && cols[i] && cols[i].gap) {
-        return `<span class="gantt-day gantt-gap" title="${fmtDate(iso(d))}">${pad2(d.getDate())}</span>`;
+        return `<span class="gantt-day gantt-gap" dir="ltr" title="${fmtDate(iso(d))}">${dayLabel}</span>`;
       }
       const weekend = showWeekends && isWeekend(d) ? " weekend" : "";
       const holiday = showWeekends && isHoliday(d) ? " holiday" : "";
       const monthStart = monthStarts.has(i) ? " month-start" : "";
-      return `<span class="gantt-day${weekend}${holiday}${monthStart}">${pad2(d.getDate())}</span>`;
+      return `<span class="gantt-day${weekend}${holiday}${monthStart}" dir="ltr" title="${fmtDate(iso(d))}">${dayLabel}</span>`;
     })
     .join("");
   const weekendMarks = showWeekends
@@ -2442,8 +2457,8 @@ function ganttHtml(project, opts) {
       return `<div class="gantt-row ${depth ? "sub" : ""} ${task.critical ? "is-critical" : ""}">
         <div class="gantt-sticky-name">
           <div class="gantt-name">${twist}<span class="gantt-name-text">${esc(task.name)}${msIcon}</span>${count}</div>
-          ${showPlanCol ? `<div class="gantt-col gantt-dates-p">${dateRange(planStart(task), planEnd(task))}</div>` : ""}
-          ${showActCol ? `<div class="gantt-col gantt-dates-a">${dateRange(task.actualStart, task.actualEnd)}</div>` : ""}
+          ${showPlanCol ? `<div class="gantt-col gantt-dates-p">${dateRangeHtml(planStart(task), planEnd(task), compact)}</div>` : ""}
+          ${showActCol ? `<div class="gantt-col gantt-dates-a">${dateRangeHtml(task.actualStart, task.actualEnd, compact)}</div>` : ""}
         </div>
         <div class="gantt-track" style="width:${scaleW}px">
           ${weekendMarks}${monthLines}
@@ -3286,13 +3301,20 @@ function captureNodeCanvas(node) {
     windowHeight: h,
     width: w,
     height: h,
+    letterRendering: true,
     onclone: (cloned) => {
       cloned.documentElement.classList.add("pdf-capture");
       cloned.body.classList.add("pdf-capture");
       cloned.documentElement.style.overflow = "visible";
       cloned.body.style.overflow = "visible";
       cloned.body.style.height = "auto";
-      cloned.querySelectorAll(".no-print").forEach((el) => el.remove());
+      cloned.querySelectorAll(".no-print").forEach((n) => n.remove());
+      cloned.querySelectorAll(".gantt-col, .gantt-day, .gantt-band, .gantt-sticky-label, .gantt-date-text").forEach((n) => {
+        n.style.fontFamily = "Arial, Tahoma, sans-serif";
+        n.style.fontVariantNumeric = "normal";
+        n.style.fontFeatureSettings = "normal";
+        n.setAttribute("dir", "ltr");
+      });
     }
   });
 }
@@ -3331,16 +3353,13 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([arr], { type: mime });
 }
 
-function sendReportPdf(project, toValue) {
-  let emails = [];
-  if (toValue === "all") emails = usersWithEmail().map((u) => String(u.email || "").trim());
-  else emails = [String(toValue || "").trim()];
-  emails = emails.filter((e) => e.includes("@"));
+function sendReportPdf(project, emails) {
+  emails = (emails || []).map((e) => String(e || "").trim()).filter((e) => e.includes("@"));
   if (!emails.length) {
     alert(tr("sendPdfNeedEmail"));
     return;
   }
-  const who = toValue === "all" ? tr("sendPdfAll") : emails.join(", ");
+  const who = emails.join(", ");
   if (!confirm(`${tr("sendPdfConfirm")}\n${project.name}\n${who}`)) return;
   const pdfName = `${String(project.name || "report").replace(/[\\/:*?"<>|]/g, " ").slice(0, 80)}.pdf`;
   showToast(tr("sendPdfWait"));
@@ -3459,13 +3478,14 @@ function reportsView() {
             <option value="4">${tr("printPages4")}</option>
           </select>
         </label>
-        ${single ? `<label class="report-field">${tr("sendPdfTo")}
-          <select data-mail-to>
-            <option value="all">${tr("sendPdfAll")}</option>
-            ${usersWithEmail().map((u) => `<option value="${esc(u.email)}">${esc(userDisplayName(u))} — ${esc(u.email)}</option>`).join("")}
-          </select>
-        </label>
-        <button class="btn secondary" type="button" data-sendpdf>${tr("sendPdf")}</button>` : ""}
+        ${single && usersWithEmail().length ? `<div class="send-mail-box">
+          <div class="send-mail-title">${tr("sendPdfTo")}</div>
+          <label class="chk"><input type="checkbox" data-mail-all> ${tr("sendPdfAll")}</label>
+          <div class="send-mail-list">
+            ${usersWithEmail().map((u) => `<label class="chk"><input type="checkbox" data-mail-user value="${esc(u.email)}"> ${esc(userDisplayName(u))} <span class="muted">${esc(u.email)}</span></label>`).join("")}
+          </div>
+          <button class="btn secondary" type="button" data-sendpdf>${tr("sendPdf")}</button>
+        </div>` : ""}
         <button class="btn" type="button" data-print>${tr("print")}</button>
       </div>
     </div>
@@ -3518,9 +3538,17 @@ function reportsView() {
   box.querySelector("[data-print]").onclick = () => printReport();
   const sendPdf = box.querySelector("[data-sendpdf]");
   if (sendPdf) {
+    const allChk = box.querySelector("[data-mail-all]");
+    const userChks = [...box.querySelectorAll("[data-mail-user]")];
+    const syncAll = () => {
+      if (allChk) allChk.checked = userChks.length > 0 && userChks.every((c) => c.checked);
+    };
+    if (allChk) {
+      allChk.onchange = () => userChks.forEach((c) => { c.checked = allChk.checked; });
+    }
+    userChks.forEach((c) => { c.onchange = syncAll; });
     sendPdf.onclick = () => {
-      const pick = box.querySelector("[data-mail-to]");
-      sendReportPdf(list[0], pick ? pick.value : "all");
+      sendReportPdf(list[0], userChks.filter((c) => c.checked).map((c) => c.value));
     };
   }
   bindGanttOpts(box);

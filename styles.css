@@ -325,6 +325,32 @@ textarea { min-height: 80px; resize: vertical; }
   margin: 0;
   flex: none;
 }
+.send-mail-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  background: #f4f8fa;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.send-mail-title { font-weight: 700; }
+.send-mail-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  flex: 1;
+  min-width: 220px;
+}
+.send-mail-list .chk {
+  font-weight: 600;
+  font-size: 13px;
+  gap: 6px;
+  white-space: nowrap;
+}
+.send-mail-list .chk input { width: 16px; height: 16px; margin: 0; flex: none; }
 .theme-picks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 .theme-pick {
   display: flex;
@@ -541,7 +567,17 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 }
 .gantt-name { font-weight: 600; }
 .gantt-row.sub .gantt-name { font-weight: 500; color: var(--muted); font-size: 11px; }
-.gantt-col { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gantt-col { font-size: 10px; color: var(--muted); font-variant-numeric: normal; }
+.gantt-date-text {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-family: Arial, Tahoma, sans-serif;
+  font-variant-numeric: normal;
+  font-feature-settings: normal;
+  display: inline-block;
+  text-align: left;
+  line-height: 1.15;
+}
 .gantt-name-text {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -556,7 +592,8 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   box-sizing: border-box;
   border-right: 1px solid #d7e0e6;
   text-align: center;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: normal;
+  font-feature-settings: normal;
 }
 .gantt-band { display: flex; align-items: center; justify-content: flex-start; overflow: hidden; }
 .gantt-sticky-label { position: sticky; left: 0; padding: 0 6px; }
@@ -824,6 +861,12 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 .swatch.actual { background: var(--actual); }
 
 .gantt-compact .gantt-sticky-name { grid-template-columns: var(--name-w) var(--plan-w, 0px) var(--act-w, 0px); }
+.gantt-compact .gantt-col {
+  font-size: 9px;
+  white-space: normal;
+  line-height: 1.1;
+  overflow: hidden;
+}
 .report-gantt {
   height: auto;
   max-height: none;
@@ -996,6 +1039,19 @@ body.pdf-capture .report-gantt {
   height: auto !important;
   max-height: none !important;
   overflow: visible !important;
+}
+body.pdf-capture .gantt-sticky-name,
+body.pdf-capture .gantt-head,
+body.pdf-capture .gantt-sticky-label { position: static !important; }
+body.pdf-capture .gantt-col,
+body.pdf-capture .gantt-day,
+body.pdf-capture .gantt-band,
+body.pdf-capture .gantt-date-text {
+  font-family: Arial, Tahoma, sans-serif !important;
+  font-variant-numeric: normal !important;
+  font-feature-settings: normal !important;
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 body.pdf-capture .print-sheet { break-after: page; page-break-after: always; }
 .error { color: var(--danger); min-height: 1.2em; }
