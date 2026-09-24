@@ -967,6 +967,21 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 }
 .save-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .save-toast.error { background: var(--danger); }
+.report-page .report-gantt.gantt-wrap {
+  height: auto;
+  max-height: none;
+  overflow: auto;
+}
+html.pdf-capture,
+body.pdf-capture {
+  overflow: visible !important;
+  height: auto !important;
+}
+html.pdf-capture .app-shell,
+body.pdf-capture .app-shell {
+  height: auto !important;
+  min-height: 0;
+}
 body.pdf-capture .app-side,
 body.pdf-capture .no-print,
 body.pdf-capture .save-toast { display: none !important; }
@@ -975,6 +990,7 @@ body.pdf-capture .app-frame { display: block; height: auto; overflow: visible; }
 body.pdf-capture .app-content { overflow: visible !important; height: auto; }
 body.pdf-capture .page,
 body.pdf-capture .report-page { max-width: none; overflow: visible !important; }
+body.pdf-capture .table-scroll { overflow: visible !important; max-height: none !important; }
 body.pdf-capture .gantt-wrap,
 body.pdf-capture .report-gantt {
   height: auto !important;
@@ -982,17 +998,6 @@ body.pdf-capture .report-gantt {
   overflow: visible !important;
 }
 body.pdf-capture .print-sheet { break-after: page; page-break-after: always; }
-.pdf-report-root {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 800px;
-  background: #fff;
-  color: #123040;
-  z-index: 40;
-  padding: 16px;
-  box-sizing: border-box;
-}
 .error { color: var(--danger); min-height: 1.2em; }
 .print-only { display: none !important; }
 .readonly-note { background: #fff7ed; border: 1px solid #fed7aa; padding: 10px 12px; border-radius: 10px; }

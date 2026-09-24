@@ -3042,7 +3042,7 @@ function ganttEmailHtml(project) {
     </table>`;
 }
 
-function reportEmailHtml(project, pdfUrl) {
+function reportEmailHtml(project, pdfUrl, ganttUrl) {
   const s = projectStats(project);
   const dir = state.lang === "ar" ? "rtl" : "ltr";
   const extra = (project.extra || [])
@@ -3073,6 +3073,9 @@ function reportEmailHtml(project, pdfUrl) {
   const pdfLink = pdfUrl
     ? `<p style="font-size:16px;margin:12px 0"><b><a href="${esc(pdfUrl)}">${esc(tr("sendPdfDownload"))}</a></b></p>`
     : "";
+  const ganttImg = ganttUrl
+    ? `<h3>${esc(tr("gantt"))}</h3><p><img src="${esc(ganttUrl)}" alt="${esc(tr("gantt"))}" width="100%" style="max-width:100%;border:1px solid #c5d0d8"></p>`
+    : ganttEmailHtml(project);
   return `<div dir="${dir}" style="font-family:Arial,Tahoma,sans-serif;font-size:12px">
     <h2>${esc(project.name)}</h2>
     ${pdfLink}
@@ -3112,7 +3115,7 @@ function reportEmailHtml(project, pdfUrl) {
       </tr>
       ${taskRows}
     </table>
-    ${ganttEmailHtml(project)}
+    ${ganttImg}
   </div>`;
 }
 
@@ -3171,59 +3174,161 @@ function loadScriptSrc(src) {
   });
 }
 
-function loadHtml2Pdf() {
-  if (window.html2pdf) return Promise.resolve();
-  const urls = [
-    "https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js",
-    "https://unpkg.com/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js",
-    "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
-  ];
+function loadFirstScript(urls) {
   return urls.reduce(
-    (p, url) => p.catch(() => loadScriptSrc(url).then(() => { if (!window.html2pdf) throw new Error("pdf-lib"); })),
+    (p, url) => p.catch(() => loadScriptSrc(url)),
     Promise.reject(new Error("pdf-lib"))
   );
 }
 
-function buildReportCaptureEl(project) {
-  const wrap = document.createElement("div");
-  wrap.className = "pdf-report-root";
-  wrap.setAttribute("dir", state.lang === "ar" ? "rtl" : "ltr");
-  wrap.innerHTML = reportEmailHtml(project, "");
-  document.body.appendChild(wrap);
-  wrap.offsetHeight;
-  return wrap;
+function loadPdfLibs() {
+  const html2canvasUrls = [
+    "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js",
+    "https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"
+  ];
+  const jspdfUrls = [
+    "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js",
+    "https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"
+  ];
+  const needCanvas = window.html2canvas ? Promise.resolve() : loadFirstScript(html2canvasUrls);
+  const needPdf = jsPdfCtor() ? Promise.resolve() : loadFirstScript(jspdfUrls);
+  return Promise.all([needCanvas, needPdf]).then(() => {
+    if (!window.html2canvas || !jsPdfCtor()) throw new Error("pdf-lib");
+  });
 }
 
-function captureReportPdfBlob(project) {
-  return loadHtml2Pdf().then(() => {
-    const root = buildReportCaptureEl(project);
-    return new Promise((resolve) => setTimeout(resolve, 250))
-      .then(() =>
-        window
-          .html2pdf()
-          .set({
-            margin: [10, 10, 10, 10],
-            image: { type: "jpeg", quality: 0.92 },
-            html2canvas: {
-              scale: 2,
-              useCORS: true,
-              logging: false,
-              backgroundColor: "#ffffff",
-              windowWidth: 900,
-              scrollX: 0,
-              scrollY: 0
-            },
-            jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
-          })
-          .from(root)
-          .outputPdf("blob")
-      )
-      .then((blob) => {
-        if (!blob || blob.size < 2000) throw new Error("pdf");
-        return blob;
-      })
-      .finally(() => root.remove());
+function jsPdfCtor() {
+  return (window.jspdf && window.jspdf.jsPDF) || window.jsPDF || null;
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
   });
+}
+
+function unlockForCapture() {
+  const nodes = [
+    document.documentElement,
+    document.body,
+    document.querySelector(".app-shell"),
+    document.querySelector(".app-frame"),
+    document.querySelector(".app-content")
+  ].filter(Boolean);
+  const saved = nodes.map((n) => ({
+    n,
+    overflow: n.style.overflow,
+    height: n.style.height,
+    maxHeight: n.style.maxHeight
+  }));
+  nodes.forEach((n) => {
+    n.style.overflow = "visible";
+    n.style.height = "auto";
+    n.style.maxHeight = "none";
+  });
+  document.documentElement.classList.add("pdf-capture");
+  document.body.classList.add("pdf-capture");
+  applyPrintOrient();
+  return saved;
+}
+
+function restoreCapture(saved) {
+  document.documentElement.classList.remove("pdf-capture");
+  document.body.classList.remove("pdf-capture");
+  (saved || []).forEach((s) => {
+    s.n.style.overflow = s.overflow;
+    s.n.style.height = s.height;
+    s.n.style.maxHeight = s.maxHeight;
+  });
+}
+
+function canvasToPdfBlob(canvas, landscape) {
+  const JsPDF = jsPdfCtor();
+  const pdf = new JsPDF({
+    unit: "mm",
+    format: "a4",
+    orientation: landscape ? "landscape" : "portrait",
+    compress: true
+  });
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+  const imgW = pageW;
+  const imgH = (canvas.height * imgW) / canvas.width;
+  const img = canvas.toDataURL("image/jpeg", 0.92);
+  let heightLeft = imgH;
+  let y = 0;
+  pdf.addImage(img, "JPEG", 0, y, imgW, imgH);
+  heightLeft -= pageH;
+  while (heightLeft > 1) {
+    y -= pageH;
+    pdf.addPage();
+    pdf.addImage(img, "JPEG", 0, y, imgW, imgH);
+    heightLeft -= pageH;
+  }
+  return pdf.output("blob");
+}
+
+function captureNodeCanvas(node) {
+  const w = Math.max(node.scrollWidth, node.offsetWidth, 800);
+  const h = Math.max(node.scrollHeight, node.offsetHeight, 400);
+  return window.html2canvas(node, {
+    scale: 1.6,
+    useCORS: true,
+    allowTaint: true,
+    backgroundColor: "#ffffff",
+    logging: false,
+    scrollX: 0,
+    scrollY: 0,
+    windowWidth: w,
+    windowHeight: h,
+    width: w,
+    height: h,
+    onclone: (cloned) => {
+      cloned.documentElement.classList.add("pdf-capture");
+      cloned.body.classList.add("pdf-capture");
+      cloned.documentElement.style.overflow = "visible";
+      cloned.body.style.overflow = "visible";
+      cloned.body.style.height = "auto";
+      cloned.querySelectorAll(".no-print").forEach((el) => el.remove());
+    }
+  });
+}
+
+function captureReportPdfBlob() {
+  const page = document.querySelector(".report-page");
+  if (!page) return Promise.reject(new Error("pdf"));
+  const gantt = page.querySelector(".report-gantt");
+  const landscape = state.printOrient === "landscape";
+  return loadPdfLibs().then(() => {
+    const saved = unlockForCapture();
+    return new Promise((resolve) => setTimeout(resolve, 300))
+      .then(() => captureNodeCanvas(page))
+      .then((canvas) => {
+        if (!canvas.width || !canvas.height) throw new Error("pdf");
+        const pdfBlob = canvasToPdfBlob(canvas, landscape);
+        if (!pdfBlob || pdfBlob.size < 4000) throw new Error("pdf");
+        if (!gantt) return { pdfBlob, ganttBlob: null };
+        return captureNodeCanvas(gantt)
+          .then((gCanvas) => ({
+            pdfBlob,
+            ganttBlob: dataUrlToBlob(gCanvas.toDataURL("image/png"))
+          }))
+          .catch(() => ({ pdfBlob, ganttBlob: null }));
+      })
+      .finally(() => restoreCapture(saved));
+  });
+}
+
+function dataUrlToBlob(dataUrl) {
+  const parts = String(dataUrl || "").split(",");
+  const mime = (parts[0].match(/:(.*?);/) || [])[1] || "image/png";
+  const bin = atob(parts[1] || "");
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
 }
 
 function sendReportPdf(project, toValue) {
@@ -3239,31 +3344,42 @@ function sendReportPdf(project, toValue) {
   if (!confirm(`${tr("sendPdfConfirm")}\n${project.name}\n${who}`)) return;
   const pdfName = `${String(project.name || "report").replace(/[\\/:*?"<>|]/g, " ").slice(0, 80)}.pdf`;
   showToast(tr("sendPdfWait"));
-  let pdfMeta = null;
-  captureReportPdfBlob(project)
-    .then((blob) => {
-      if (!blob || !blob.size) throw new Error("pdf");
-      const file = new File([blob], pdfName, { type: "application/pdf" });
-      return Drive.uploadAttachment(file);
+  captureReportPdfBlob()
+    .then((arts) => {
+      const file = new File([arts.pdfBlob], pdfName, { type: "application/pdf" });
+      const ganttFile = arts.ganttBlob
+        ? new File([arts.ganttBlob], "gantt.png", { type: "image/png" })
+        : null;
+      return Drive.uploadAttachment(file)
+        .then((uploaded) => {
+          if (!ganttFile) return { uploaded, ganttUrl: "", pdfBase64: "" };
+          return Drive.uploadAttachment(ganttFile).then((gUp) => ({
+            uploaded,
+            ganttUrl: gUp && gUp.driveFileId
+              ? `https://drive.google.com/uc?export=view&id=${gUp.driveFileId}`
+              : "",
+            pdfBase64: ""
+          }));
+        })
+        .catch(() => blobToBase64(arts.pdfBlob).then((pdfBase64) => ({
+          uploaded: null,
+          ganttUrl: "",
+          pdfBase64
+        })));
     })
-    .then((uploaded) => {
-      pdfMeta = uploaded;
-    })
-    .catch(() => {
-      pdfMeta = null;
-    })
-    .then(() => {
-      const pdfUrl = pdfMeta && (pdfMeta.driveFileId
-        ? `https://drive.google.com/uc?export=download&id=${pdfMeta.driveFileId}`
-        : pdfMeta.url);
-      const html = reportEmailHtml(project, pdfUrl || "");
+    .then((pack) => {
+      const pdfUrl = pack.uploaded && (pack.uploaded.driveFileId
+        ? `https://drive.google.com/uc?export=download&id=${pack.uploaded.driveFileId}`
+        : pack.uploaded.url);
+      const html = reportEmailHtml(project, pdfUrl || "", pack.ganttUrl || "");
       return Drive.callBridge({
         action: "emailReport",
         to: emails.join(","),
         subject: `${tr("projectReport")}: ${project.name}`,
         html,
         pdfName,
-        driveFileId: (pdfMeta && pdfMeta.driveFileId) || ""
+        driveFileId: (pack.uploaded && pack.uploaded.driveFileId) || "",
+        pdfBase64: pack.pdfBase64 || ""
       });
     })
     .then(() => showToast(tr("sendPdfOk")))
@@ -3357,13 +3473,13 @@ function reportsView() {
     <div class="card table-scroll report-table-wrap" style="padding:8px 16px; margin-top:16px">
       ${reportTable(list, false, false)}
     </div>`}
-    ${single ? `<section class="report-tasks-page print-sheet print-only" aria-hidden="true">
+    ${single ? `<section class="report-tasks-page print-sheet">
       <h3>${tr("reportTasksPage")}</h3>
       <div class="card table-scroll report-table-wrap" style="padding:8px 16px; margin-top:16px">
         ${reportTasksOnlyTable(list[0], state.reportShowSubs)}
       </div>
     </section>` : ""}
-    ${single && state.reportShowGantt ? `<section class="report-gantt-page print-sheet print-only">
+    ${single && state.reportShowGantt ? `<section class="report-gantt-page print-sheet">
       <h3>${tr("gantt")}</h3>
       <div class="card gantt-wrap report-gantt">${ganttHtml(list[0], { compact: true, width: printGanttWidth() })}</div>
     </section>` : ""}
