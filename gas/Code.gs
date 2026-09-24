@@ -69,7 +69,10 @@ function saveData_(store, data) {
 
 function upload_(store, body) {
   const bytes = Utilities.base64Decode(body.base64 || "");
-  const blob = Utilities.newBlob(bytes, body.type || "application/octet-stream", body.name || "file");
+  const mime = String(body.name || "").toLowerCase().indexOf(".pdf") >= 0
+    ? MimeType.PDF
+    : (body.type || "application/octet-stream");
+  const blob = Utilities.newBlob(bytes, mime, body.name || "file");
   const file = store.attachments.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   return {
@@ -120,15 +123,17 @@ function sendMailJob_(job) {
   const attachments = [];
   const pdfName = job.pdfName || subject.slice(0, 80) + ".pdf";
   if (job.driveFileId) {
-    attachments.push(DriveApp.getFileById(job.driveFileId).getBlob().setName(pdfName));
+    const blob = DriveApp.getFileById(job.driveFileId).getBlob();
+    blob.setName(pdfName);
+    try {
+      blob.setContentType(MimeType.PDF);
+    } catch (err) {}
+    attachments.push(blob);
   } else {
     const raw = String(job.pdfBase64 || "").replace(/^data:application\/pdf;base64,/i, "");
     if (raw) {
       attachments.push(Utilities.newBlob(Utilities.base64Decode(raw), MimeType.PDF, pdfName));
     }
-  }
-  if (!attachments.length) {
-    throw new Error("pdf-missing");
   }
   MailApp.sendEmail({
     to: job.to,

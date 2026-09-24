@@ -226,7 +226,7 @@ const I18N = {
     sendPdfNeedEmail: "لا يوجد بريد إلكتروني صالح.",
     sendPdfWait: "جاري تجهيز ملف PDF وإرساله…",
     sendPdfConfirm: "هل تريد إرسال تقرير المشروع كملف PDF؟",
-    sendPdfNoPdf: "تعذر إنشاء ملف PDF. تحقق من الاتصال ثم أعد المحاولة.",
+    sendPdfDownload: "تحميل التقرير PDF",
     holidays: "العطل الرسمية",
     addHoliday: "إضافة عطلة",
     holidayNameAr: "اسم العطلة بالعربي",
@@ -467,7 +467,7 @@ const I18N = {
     sendPdfNeedEmail: "No valid email address.",
     sendPdfWait: "Preparing the PDF and sending…",
     sendPdfConfirm: "Send this project report as a PDF?",
-    sendPdfNoPdf: "Could not create the PDF. Check the connection and try again.",
+    sendPdfDownload: "Download PDF report",
     holidays: "Official holidays",
     addHoliday: "Add holiday",
     holidayNameAr: "Holiday name in Arabic",
@@ -2993,7 +2993,49 @@ function usersWithEmail() {
   return (state.data.users || []).filter((u) => String(u.email || "").includes("@"));
 }
 
-function reportEmailHtml(project) {
+function ganttEmailHtml(project) {
+  const dates = collectDates(project);
+  if (!dates.length) return `<p>—</p>`;
+  const min = new Date(Math.min.apply(null, dates));
+  const max = new Date(Math.max.apply(null, dates));
+  const n = Math.max(1, enumerateDays(min, max).length);
+  const idx = (value) => {
+    const d = parseDay(value);
+    if (!d) return null;
+    const i = Math.round((d.getTime() - min.getTime()) / 86400000);
+    return Math.max(0, Math.min(n - 1, i));
+  };
+  const barRow = (start, end, color) => {
+    const a = idx(start);
+    const b = idx(end);
+    if (a == null) return "";
+    const i2 = b == null ? a : b;
+    const left = Math.round((Math.min(a, i2) / n) * 100);
+    const width = Math.max(2, Math.round(((Math.abs(i2 - a) + 1) / n) * 100));
+    const right = Math.max(0, 100 - left - width);
+    return `<table width="100%" cellpadding="0" cellspacing="0" style="margin:1px 0"><tr>
+      <td width="${left}%"></td>
+      <td width="${width}%" bgcolor="${color}" style="height:8px;line-height:8px;font-size:1px">&nbsp;</td>
+      <td width="${right}%"></td>
+    </tr></table>`;
+  };
+  const rows = visibleTaskRows(project)
+    .map(({ task, depth }) => `<tr>
+      <td style="padding:4px;border:1px solid #c5d0d8;white-space:nowrap">${depth ? "— " : ""}${esc(task.name)}</td>
+      <td style="padding:4px;border:1px solid #c5d0d8;width:72%">
+        ${barRow(task.baseStart, task.baseEnd, "#cbd5e1")}
+        ${barRow(planStart(task), planEnd(task), task.critical ? "#b45309" : "#0f766e")}
+        ${barRow(actualBarStart(task), actualBarEnd(task), "#2563eb")}
+      </td>
+    </tr>`)
+    .join("");
+  return `<h3>${esc(tr("gantt"))}</h3>
+    <p>${fmtDate(iso(min))} → ${fmtDate(iso(max))}</p>
+    <p style="font-size:11px">${esc(tr("baseline"))} · ${esc(tr("planned"))} · ${esc(tr("actual"))}</p>
+    <table width="100%" cellpadding="0" cellspacing="0">${rows}</table>`;
+}
+
+function reportEmailHtml(project, pdfUrl) {
   const s = projectStats(project);
   const dir = state.lang === "ar" ? "rtl" : "ltr";
   const extra = (project.extra || [])
@@ -3021,8 +3063,12 @@ function reportEmailHtml(project) {
       </tr>`;
     })
     .join("");
+  const pdfLink = pdfUrl
+    ? `<p style="font-size:16px;margin:12px 0"><b><a href="${esc(pdfUrl)}">${esc(tr("sendPdfDownload"))}</a></b></p>`
+    : "";
   return `<div dir="${dir}" style="font-family:Arial,Tahoma,sans-serif;font-size:12px">
     <h2>${esc(project.name)}</h2>
+    ${pdfLink}
     <table border="1" cellpadding="5" cellspacing="0" width="100%">
       <tr><td>${esc(tr("hospital"))}</td><td>${esc(project.hospital || "")}</td></tr>
       <tr><td>${esc(tr("location"))}</td><td>${esc(project.location || "")}</td></tr>
@@ -3034,9 +3080,12 @@ function reportEmailHtml(project) {
       <b>${esc(tr("plannedCost"))}:</b> ${money(s.plannedCost)} ·
       <b>${esc(tr("actualCost"))}:</b> ${money(s.actualCost)} ·
       <b>${esc(tr("variance"))}:</b> ${varText(s.variance)} ${esc(tr("currency"))} ·
-      <b>${esc(tr("remainingDays"))}:</b> ${s.remainingDays} ${esc(tr("days"))}
+      <b>${esc(tr("plannedDays"))}:</b> ${s.plannedDays} ·
+      <b>${esc(tr("actualDays"))}:</b> ${s.actualDays} ·
+      <b>${esc(tr("remainingDays"))}:</b> ${s.remainingDays} ${esc(tr("days"))} ·
+      <b>${esc(tr("taskCount"))}:</b> ${s.count} ·
+      <b>${esc(tr("doneCount"))}:</b> ${s.doneCount}
     </p>
-    <p>${esc(tr("gantt"))}: ${state.reportShowGantt ? esc(tr("showGantt")) : "—"}</p>
     <h3>${esc(tr("reportTasksPage"))}</h3>
     <table border="1" cellpadding="4" cellspacing="0" width="100%">
       <tr>
@@ -3056,6 +3105,7 @@ function reportEmailHtml(project) {
       </tr>
       ${taskRows}
     </table>
+    ${ganttEmailHtml(project)}
   </div>`;
 }
 
@@ -3104,27 +3154,33 @@ function buildEmailReport(project) {
   };
 }
 
-function loadHtml2Pdf() {
-  if (window.html2pdf) return Promise.resolve();
+function loadScriptSrc(src) {
   return new Promise((resolve, reject) => {
     const s = document.createElement("script");
-    s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+    s.src = src;
     s.onload = () => resolve();
     s.onerror = () => reject(new Error("pdf-lib"));
     document.head.appendChild(s);
   });
 }
 
+function loadHtml2Pdf() {
+  if (window.html2pdf) return Promise.resolve();
+  const urls = [
+    "https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js",
+    "https://unpkg.com/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"
+  ];
+  return urls.reduce(
+    (p, url) => p.catch(() => loadScriptSrc(url).then(() => { if (!window.html2pdf) throw new Error("pdf-lib"); })),
+    Promise.reject(new Error("pdf-lib"))
+  );
+}
+
 function buildReportCaptureEl(project) {
   const wrap = document.createElement("div");
   wrap.className = "pdf-report-root";
   wrap.setAttribute("dir", state.lang === "ar" ? "rtl" : "ltr");
-  const gantt = state.reportShowGantt
-    ? `<section class="print-sheet pdf-gantt-sheet">
-        <h3>${esc(tr("gantt"))}</h3>
-        <div class="card gantt-wrap report-gantt">${ganttHtml(project, { compact: true, width: state.printOrient === "landscape" ? 980 : 670 })}</div>
-      </section>`
-    : "";
   wrap.innerHTML = `${reportCoverHtml(project)}
     <section class="print-sheet pdf-tasks-sheet">
       <h3>${esc(tr("reportTasksPage"))}</h3>
@@ -3132,7 +3188,10 @@ function buildReportCaptureEl(project) {
         ${reportTasksOnlyTable(project, state.reportShowSubs)}
       </div>
     </section>
-    ${gantt}`;
+    <section class="print-sheet pdf-gantt-sheet">
+      <h3>${esc(tr("gantt"))}</h3>
+      <div class="card gantt-wrap report-gantt">${ganttHtml(project, { compact: true, width: state.printOrient === "landscape" ? 980 : 670 })}</div>
+    </section>`;
   document.body.appendChild(wrap);
   return wrap;
 }
@@ -3170,9 +3229,9 @@ function sendReportPdf(project, toValue) {
   }
   const who = toValue === "all" ? tr("sendPdfAll") : emails.join(", ");
   if (!confirm(`${tr("sendPdfConfirm")}\n${project.name}\n${who}`)) return;
-  const payload = buildEmailReport(project);
   const pdfName = `${String(project.name || "report").replace(/[\\/:*?"<>|]/g, " ").slice(0, 80)}.pdf`;
   showToast(tr("sendPdfWait"));
+  let pdfMeta = null;
   captureReportPdfBlob(project)
     .then((blob) => {
       if (!blob || !blob.size) throw new Error("pdf");
@@ -3180,23 +3239,28 @@ function sendReportPdf(project, toValue) {
       return Drive.uploadAttachment(file);
     })
     .then((uploaded) => {
-      if (!uploaded || !uploaded.driveFileId) throw new Error("pdf");
+      pdfMeta = uploaded;
+    })
+    .catch(() => {
+      pdfMeta = null;
+    })
+    .then(() => {
+      const pdfUrl = pdfMeta && (pdfMeta.driveFileId
+        ? `https://drive.google.com/uc?export=download&id=${pdfMeta.driveFileId}`
+        : pdfMeta.url);
+      const html = reportEmailHtml(project, pdfUrl || "");
       return Drive.callBridge({
         action: "emailReport",
         to: emails.join(","),
-        subject: payload.subject,
-        html: payload.html,
+        subject: `${tr("projectReport")}: ${project.name}`,
+        html,
         pdfName,
-        driveFileId: uploaded.driveFileId
+        driveFileId: (pdfMeta && pdfMeta.driveFileId) || ""
       });
     })
     .then(() => showToast(tr("sendPdfOk")))
     .catch((err) => {
       const msg = String((err && err.message) || err || "");
-      if (msg === "pdf" || msg === "pdf-lib" || msg === "pdf-missing") {
-        alert(tr("sendPdfNoPdf"));
-        return;
-      }
       if (msg === "mail-auth" || /MailApp|send_mail|sendEmail/i.test(msg)) {
         alert(tr("sendPdfNeedMailAuth"));
         return;
