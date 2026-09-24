@@ -181,8 +181,8 @@ textarea { min-height: 80px; resize: vertical; }
   box-shadow: inset 3px 0 0 #5eead4;
 }
 [dir="rtl"] .app-side .side-link.is-on { box-shadow: inset -3px 0 0 #5eead4; }
-.project-panel { display: none; }
-.project-panel.is-on { display: block; }
+.project-panel { display: none !important; }
+.project-panel.is-on { display: block !important; }
 .report-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 .report-toolbar label { margin: 0; min-width: 160px; flex: 1; }
 
@@ -678,7 +678,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 .save-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .save-toast.error { background: var(--danger); }
 .error { color: var(--danger); min-height: 1.2em; }
-.print-only { display: none; }
+.print-only { display: none !important; }
 .readonly-note { background: #fff7ed; border: 1px solid #fed7aa; padding: 10px 12px; border-radius: 10px; }
 
 [dir="rtl"] th, [dir="rtl"] td { text-align: right; }

@@ -1399,8 +1399,8 @@ function projectView() {
         <button class="btn danger" data-delp>${tr("delete")}</button>` : ""}
       </div>
     </div>
-    <div class="project-main">
-        <section class="project-panel${tab === "overview" ? " is-on" : ""}" data-panel="overview">
+    <div class="project-main">${
+      tab === "overview" ? `<section class="project-panel is-on" data-panel="overview">
           <h3>${tr("overallProgress")}</h3>
           <div class="kpis">
             <div class="card kpi"><span class="muted">${tr("progress")}</span><b>${s.progress}%</b></div>
@@ -1410,8 +1410,7 @@ function projectView() {
             <div class="card kpi"><span class="muted">${tr("plannedDays")}</span><b>${s.plannedDays} ${tr("days")}</b></div>
             <div class="card kpi"><span class="muted">${tr("actualDays")}</span><b>${s.actualDays} ${tr("days")}</b></div>
           </div>
-        </section>
-        <section class="project-panel${tab === "info" ? " is-on" : ""}" data-panel="info">
+        </section>` : tab === "info" ? `<section class="project-panel is-on" data-panel="info">
           <div class="row" style="justify-content:space-between">
             <h3>${tr("projectInfo")}</h3>
             ${isPm() ? `<button class="btn" data-info>${tr("edit")}</button>` : ""}
@@ -1425,8 +1424,7 @@ function projectView() {
             ${extraRows}
             </tbody>
           </table>
-        </section>
-        <section class="project-panel${tab === "gantt" ? " is-on" : ""}" data-panel="gantt">
+        </section>` : tab === "gantt" ? `<section class="project-panel is-on" data-panel="gantt">
           <h3>${tr("gantt")}</h3>
           <p class="hint gantt-hint no-print">${tr("ganttSwipe")}</p>
           <div class="legend">
@@ -1437,8 +1435,13 @@ function projectView() {
             <span><i class="swatch milestone"></i>${tr("milestone")}</span>
           </div>
           <div class="card gantt-wrap">${ganttHtml(project)}</div>
-        </section>
-        <section class="project-panel${tab === "tasks" ? " is-on" : ""}" data-panel="tasks">
+        </section>` : tab === "files" ? `<section class="project-panel is-on" data-panel="files">
+          <div class="row" style="justify-content:space-between">
+            <h3>${tr("projectFiles")}</h3>
+            <button class="btn" data-files>${tr("projectFiles")}${fileCount ? ` (${fileCount})` : ""}</button>
+          </div>
+          <p class="muted">${fileCount ? fileCount : tr("noFiles")}</p>
+        </section>` : `<section class="project-panel is-on" data-panel="tasks">
           <div class="row" style="margin:0 0 8px; justify-content:space-between">
             <h3>${tr("tasks")}</h3>
             ${isPm() ? `<button class="btn" data-addt>${tr("addTask")}</button>` : ""}
@@ -1457,15 +1460,8 @@ function projectView() {
               <tbody data-tasks-body></tbody>
             </table>
           </div>
-        </section>
-        <section class="project-panel${tab === "files" ? " is-on" : ""}" data-panel="files">
-          <div class="row" style="justify-content:space-between">
-            <h3>${tr("projectFiles")}</h3>
-            <button class="btn" data-files>${tr("projectFiles")}${fileCount ? ` (${fileCount})` : ""}</button>
-          </div>
-          <p class="muted">${fileCount ? fileCount : tr("noFiles")}</p>
-        </section>
-    </div>
+        </section>`
+    }</div>
   </div>`);
   const tbody = box.querySelector("[data-tasks-body]");
   if (tbody) {
@@ -2472,13 +2468,13 @@ function reportsView() {
     <div class="card table-scroll report-table-wrap" style="padding:8px 16px; margin-top:16px">
       ${reportTable(list, false, false)}
     </div>`}
-    ${single ? `<section class="report-tasks-page print-sheet print-only">
+    ${single ? `<section class="report-tasks-page print-sheet print-only" aria-hidden="true">
       <h3>${tr("reportTasksPage")}</h3>
       <div class="card table-scroll report-table-wrap" style="padding:8px 16px; margin-top:16px">
         ${reportTasksOnlyTable(list[0], state.reportShowSubs)}
       </div>
     </section>` : ""}
-    ${single ? `<section class="report-gantt-page print-sheet">
+    ${single && state.reportShowGantt ? `<section class="report-gantt-page print-sheet print-only">
       <h3>${tr("gantt")}</h3>
       <div class="card gantt-wrap report-gantt">${ganttHtml(list[0], { compact: true, width: 670 })}</div>
     </section>` : ""}
