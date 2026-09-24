@@ -1264,15 +1264,18 @@ async function refreshApp() {
       const found = html.match(/app\.js\?v=([^"'&\s]+)/);
       v = found ? found[1] : stamp;
     }
-    const next = new URL("index.html", location.href);
+    const next = new URL(location.href);
+    next.search = "";
+    const path = next.pathname.endsWith("/") || next.pathname.endsWith(".html")
+      ? next.pathname
+      : next.pathname + "/";
+    next.pathname = path;
     next.searchParams.set("v", v);
     next.searchParams.set("t", stamp);
     location.replace(next.href);
   } catch (err) {
     showToast(tr("refreshFail"), true);
   }
-}
-
 }
 
 function loginView() {
