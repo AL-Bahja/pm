@@ -426,6 +426,18 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   height: var(--head-h);
 }
 .gantt-row { height: var(--row-h); border-bottom: 1px solid #edf2f5; }
+.gantt-row-lines .gantt-row { border-bottom: 1px solid #d3dce3; }
+.gantt-row-lines .gantt-track::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: rgba(18, 32, 43, 0.1);
+  z-index: 1;
+  pointer-events: none;
+}
 .gantt-name, .gantt-col {
   display: flex;
   align-items: center;
@@ -473,14 +485,10 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 .gantt-band.month { background: #e6eef2; color: var(--ink); font-size: 11px; font-weight: 700; padding: 0; height: 16px; border-right-color: #8aa0ad; }
 .gantt-day { flex: 0 0 var(--day-w); width: var(--day-w); height: 16px; font-size: 9px; color: var(--muted); padding: 0; line-height: 16px; background: #f7fafb; }
 .gantt-day.gantt-gap { background: #eef2f5; color: #94a3b8; letter-spacing: 1px; }
-.gantt-day.weekend { background: #eceff2; color: #9aa7b2; }
+.gantt-day.weekend { background: #e8ecf0; color: #8b97a3; }
 .gantt-weekend {
   position: absolute; top: 0; bottom: 0;
-  background: repeating-linear-gradient(
-    -45deg,
-    rgba(18, 32, 43, 0.05) 0 3px,
-    transparent 3px 7px
-  );
+  background: #e8ecf0;
   z-index: 0;
   pointer-events: none;
 }

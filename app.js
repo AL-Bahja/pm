@@ -207,7 +207,8 @@ const I18N = {
     googleHint: "من أي حاسبة: اربط جوجل درايف بحساب الشركة picassomega86@gmail.com (هذا التخزين المشترك). بعد ذلك يظهر دخول النظام: مدير المشاريع أو مستخدم آخر.",
     googleWrongAccount: "يفضّل استخدام حساب درايف الشركة:",
     driveFolder: "مجلد التطبيق",
-    ganttSwipe: "على الهاتف: اسحب للتواريخ. خطان لكل مهمة: الرمادي خط الأساس، والسفلي المتوقع مع الفعلي فوقه."
+    ganttSwipe: "على الهاتف: اسحب للتواريخ. خطان لكل مهمة: الرمادي خط الأساس، والسفلي المتوقع مع الفعلي فوقه.",
+    ganttRowLines: "خطوط أفقية لتحديد المهام"
   },
   en: {
     app: "Al-Bahja Company Project Management",
@@ -417,7 +418,8 @@ const I18N = {
     googleHint: "On any PC, connect Google Drive with the company account picassomega86@gmail.com (shared storage). Then sign in as project manager or another user.",
     googleWrongAccount: "Prefer the company Drive account:",
     driveFolder: "App folder",
-    ganttSwipe: "On phone: swipe for dates. Two bars per task: gray = baseline, lower = planned with actual on top."
+    ganttSwipe: "On phone: swipe for dates. Two bars per task: gray = baseline, lower = planned with actual on top.",
+    ganttRowLines: "Horizontal lines to track task rows"
   }
 };
 
@@ -1125,6 +1127,7 @@ const state = {
   expanded: {},
   projectTab: "info",
   theme: localStorage.getItem(KEY + "-theme") || "teal",
+  ganttRowLines: localStorage.getItem(KEY + "-gantt-rows") !== "off",
   driveReady: false,
   driveSaving: false,
   driveError: "",
@@ -1709,6 +1712,7 @@ function projectView() {
             <span><i class="swatch actual"></i>${tr("actual")}</span>
             <span><i class="swatch critical"></i>${tr("critical")}</span>
             <span><i class="swatch milestone"></i>${tr("milestone")}</span>
+            <label class="chk no-print"><input type="checkbox" data-gantt-rows ${state.ganttRowLines ? "checked" : ""}> ${tr("ganttRowLines")}</label>
           </div>
           <div class="card gantt-wrap">${ganttHtml(project)}</div>
         </section>` : tab === "files" ? `<section class="project-panel is-on" data-panel="files">
@@ -1752,6 +1756,14 @@ function projectView() {
     });
   }
   bindGanttScroll(box);
+  const rowLines = box.querySelector("[data-gantt-rows]");
+  if (rowLines) {
+    rowLines.onchange = () => {
+      state.ganttRowLines = rowLines.checked;
+      localStorage.setItem(KEY + "-gantt-rows", rowLines.checked ? "on" : "off");
+      render();
+    };
+  }
   box.querySelectorAll("[data-twist]").forEach((btn) => {
     btn.onclick = (e) => {
       e.preventDefault();
@@ -2218,7 +2230,7 @@ function ganttHtml(project, opts) {
     ? `<svg class="gantt-links" width="${lockW + scaleW}" height="${svgH}" viewBox="0 0 ${lockW + scaleW} ${svgH}" preserveAspectRatio="none">${links.join("")}</svg>`
     : "";
 
-  return `<div class="gantt${compact ? " gantt-compact" : ""}" style="--day-w:${dayW}px;--name-w:${nameW}px;--date-w:${dateW}px;--lock-w:${lockW}px;width:${lockW + scaleW}px;max-width:100%">
+  return `<div class="gantt${compact ? " gantt-compact" : ""}${state.ganttRowLines ? " gantt-row-lines" : ""}" style="--day-w:${dayW}px;--name-w:${nameW}px;--date-w:${dateW}px;--lock-w:${lockW}px;width:${lockW + scaleW}px;max-width:100%">
     <div class="gantt-scroll">
       <div class="gantt-head">
         <div class="gantt-sticky-name">
