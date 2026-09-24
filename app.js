@@ -85,6 +85,7 @@ const I18N = {
     slack: "الفاصل (Slack)",
     critical: "مسار حرج",
     autoSchedule: "ضبط التواريخ تلقائياً حسب الاعتماديات",
+    autoScheduleHint: "يبقى الخيار محفوظاً. عند كل حفظ تُحدَّث التواريخ المتوقعة لهذه المهمة من الاعتماديات.",
     noPreds: "لا اعتماديات",
     not_started: "لم تبدأ",
     in_progress: "قيد التنفيذ",
@@ -292,6 +293,7 @@ const I18N = {
     slack: "Slack",
     critical: "Critical path",
     autoSchedule: "Shift dates automatically from dependencies",
+    autoScheduleHint: "This stays saved. Each save updates this task’s planned dates from its predecessors.",
     noPreds: "No predecessors",
     not_started: "Not started",
     in_progress: "In progress",
@@ -572,6 +574,7 @@ function migrateTask(task) {
   task.costFiles = [];
   if (!Array.isArray(task.preds)) task.preds = [];
   if (task.milestone == null) task.milestone = false;
+  if (task.autoSchedule == null) task.autoSchedule = false;
   if (task.percent == null) {
     task.percent = task.status === "done" ? 100 : task.status === "in_progress" ? 50 : 0;
   }
@@ -598,7 +601,7 @@ function applyDependencies(project) {
   for (let n = 0; n < 30; n++) {
     let moved = false;
     list.forEach((t) => {
-      if (hasChildren(t) || !t.plannedStart) return;
+      if (hasChildren(t) || !t.plannedStart || !t.autoSchedule) return;
       const span = taskSpanDays(t);
       (t.preds || []).forEach((link) => {
         const pred = byId[link.id];
@@ -795,6 +798,7 @@ function makeTask(name, ps, pe, as, ae, pc, ac, status, children) {
     costFiles: [],
     preds: [],
     milestone: false,
+    autoSchedule: false,
     percent: 0
   };
 }
@@ -2058,7 +2062,7 @@ function ganttHtml(project, opts) {
       const y2 = headH + si * rowH + rowH / 2;
       const mid = x1 + Math.max(10, Math.min(18, Math.abs(x2 - x1) / 3));
       links.push(`<path d="M ${x1} ${y1} H ${mid} V ${y2} H ${x2}" />
-        <polygon points="${x2},${y2} ${x2 - 6},${y2 - 4} ${x2 - 6},${y2 + 4}" />`);
+        <polygon points="${x2},${y2} ${x2 - 4},${y2 - 2.5} ${x2 - 4},${y2 + 2.5}" />`);
     });
   });
   const svgH = headH + vis.length * rowH;
@@ -2254,6 +2258,7 @@ function openTaskForm(project, taskItem, parent) {
     children: [],
     preds: [],
     milestone: false,
+    autoSchedule: false,
     percent: 0
   };
   const disabled = rolled ? "disabled" : "";
@@ -2305,13 +2310,15 @@ function openTaskForm(project, taskItem, parent) {
     </select></label>
     <h4>${tr("predecessors")}</h4>
     <div class="pred-box">${predRows}</div>
-    <label class="chk"><input type="checkbox" name="autoSchedule"> ${tr("autoSchedule")}</label>
+    <label class="chk"><input type="checkbox" name="autoSchedule" ${tk.autoSchedule ? "checked" : ""}> ${tr("autoSchedule")}</label>
+    <p class="muted">${tr("autoScheduleHint")}</p>
     <label>${tr("notes")}<textarea name="notes">${esc(tk.notes || "")}</textarea></label>
   `, (fd, modal) => {
     const payload = {
       name: fd.get("name"),
       notes: fd.get("notes"),
       milestone: fd.get("milestone") === "on",
+      autoSchedule: fd.get("autoSchedule") === "on",
       preds: others
         .filter((t) => fd.get("pred_" + t.id))
         .map((t) => ({
@@ -2355,6 +2362,7 @@ function openTaskForm(project, taskItem, parent) {
         costFiles: [],
         preds: [],
         milestone: false,
+        autoSchedule: false,
         percent: 0,
         ...payload
       };
@@ -2364,7 +2372,7 @@ function openTaskForm(project, taskItem, parent) {
         expandTask(parent.id);
       } else project.tasks.push(created);
     }
-    if (fd.get("autoSchedule") === "on") applyDependencies(project);
+    applyDependencies(project);
     rollupProject(project);
     save(state.data);
   });
