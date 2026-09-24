@@ -180,7 +180,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 .gantt-sticky-name {
   position: sticky;
   left: 0;
-  z-index: 4;
+  z-index: 8;
   flex: 0 0 var(--lock-w);
   width: var(--lock-w);
   display: grid;
@@ -245,6 +245,8 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   position: relative;
   height: var(--row-h);
   direction: ltr;
+  overflow: hidden;
+  z-index: 1;
   background-color: #fbfcfd;
   background-image: repeating-linear-gradient(
     to right,
@@ -271,13 +273,13 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 .bar-fill { display: block; height: 100%; background: rgba(255,255,255,0.4); }
 .ms-mark {
   position: absolute; width: 10px; height: 10px; transform: rotate(45deg);
-  top: 11px; z-index: 4; background: #64748b;
+  top: 11px; z-index: 2; background: #64748b;
 }
 .ms-mark.critical { background: #b42318; }
 .ms-mark.act { background: var(--actual); top: 12px; width: 8px; height: 8px; }
 .ms-tag { color: var(--teal); font-size: 12px; }
 .gantt-links {
-  position: absolute; left: 0; top: 0; z-index: 3; pointer-events: none; overflow: visible;
+  position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none; overflow: hidden;
 }
 .gantt-links path { fill: none; stroke: #334155; stroke-width: 1.25; }
 .gantt-links polygon { fill: #334155; }
@@ -355,7 +357,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
     width: 100%;
     max-height: 92vh;
     border-radius: 16px 16px 0 0;
-    padding: 16px 14px calc(16px + env(safe-area-inset-bottom));
+    padding: 44px 14px calc(16px + env(safe-area-inset-bottom));
   }
   .info-table th { white-space: normal; width: 42%; }
   .info-add { grid-template-columns: 1fr; }
@@ -444,11 +446,40 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 .swatch.planned { background: var(--planned); }
 .swatch.actual { background: var(--actual); }
 
+.gantt-compact .gantt-sticky-name { grid-template-columns: var(--name-w); }
+.report-gantt {
+  height: auto;
+  max-height: none;
+  overflow: auto;
+}
+.report-gantt .gantt,
+.report-gantt .gantt-scroll {
+  height: auto;
+  max-height: none;
+  min-height: 180px;
+}
+
 .modal-bg {
   position: fixed; inset: 0; background: rgba(18,32,43,0.45);
   display: grid; place-items: center; padding: 16px; z-index: 20;
 }
-.modal { width: min(720px, 100%); max-height: 90vh; overflow: auto; padding: 22px; }
+.modal { position: relative; width: min(720px, 100%); max-height: 90vh; overflow: auto; padding: 44px 22px 22px; }
+.modal-x {
+  position: absolute;
+  top: 8px;
+  inset-inline-end: 8px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: #e8eef2;
+  color: var(--ink);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 3;
+}
+.modal-x:hover { background: #d5dee4; }
 .info-table {
   width: 100%;
   border-collapse: collapse;
@@ -530,6 +561,9 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   .topbar, .no-print, .save-toast { display: none !important; }
   .page { padding: 0; max-width: none; }
   .card { box-shadow: none; }
+  .report-gantt-page { break-before: page; page-break-before: always; }
   .gantt-wrap, .report-gantt { height: auto !important; max-height: none !important; overflow: visible !important; }
   .gantt, .gantt-scroll { overflow: visible !important; height: auto; }
+  .gantt-compact .gantt-dates-p,
+  .gantt-compact .gantt-dates-a { display: none !important; }
 }

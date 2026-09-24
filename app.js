@@ -17,6 +17,10 @@ const I18N = {
     users: "المستخدمون",
     profile: "صفحتي",
     logout: "خروج",
+    confirmLogout: "هل تريد تسجيل الخروج؟",
+    confirmDelete: "هل تريد الحذف؟ لا يمكن التراجع عن ذلك.",
+    confirmDeleteTask: "هل تريد حذف هذه المهمة؟",
+    confirmDeleteProject: "هل تريد حذف هذا المشروع؟",
     addProject: "إضافة مشروع",
     editProject: "تعديل المشروع",
     copyProject: "نسخ المشروع",
@@ -195,6 +199,10 @@ const I18N = {
     users: "Users",
     profile: "My profile",
     logout: "Log out",
+    confirmLogout: "Sign out?",
+    confirmDelete: "Delete this item? This cannot be undone.",
+    confirmDeleteTask: "Delete this task?",
+    confirmDeleteProject: "Delete this project?",
     addProject: "Add project",
     editProject: "Edit project",
     copyProject: "Copy project",
@@ -432,17 +440,35 @@ function deriveStatus(task) {
   return "not_started";
 }
 
+function hasPastActualEnd(task) {
+  const d = parseDay(task.actualEnd);
+  if (!d) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return d.getTime() < today.getTime();
+}
+
+function applyDoneFromActual(task) {
+  if (hasChildren(task)) return;
+  if (hasPastActualEnd(task)) {
+    task.status = "done";
+    task.percent = 100;
+  }
+}
+
 function rollupTask(task) {
   if (!task.children) task.children = [];
   task.children.forEach(rollupTask);
-  if (!hasChildren(task)) return task;
+  if (!hasChildren(task)) {
+    applyDoneFromActual(task);
+    return task;
+  }
   task.plannedCost = task.children.reduce((s, c) => s + Number(c.plannedCost || 0), 0);
   task.actualCost = task.children.reduce((s, c) => s + Number(c.actualCost || 0), 0);
   if (!task.plannedStart) task.plannedStart = minDate(task.children.map((c) => c.plannedStart));
   if (!task.plannedEnd) task.plannedEnd = maxDate(task.children.map((c) => c.plannedEnd));
   if (!task.actualStart) task.actualStart = minDate(task.children.map((c) => c.actualStart));
   if (!task.actualEnd) task.actualEnd = maxDate(task.children.map((c) => c.actualEnd));
-  task.status = deriveStatus(task);
   return task;
 }
 
@@ -1191,6 +1217,7 @@ function shellView(user) {
   });
   wrap.querySelector("[data-lang]").onclick = setLang;
   wrap.querySelector("[data-out]").onclick = () => {
+    if (!confirm(tr("confirmLogout"))) return;
     flushSave().catch(() => {});
     state.session = null;
     persistSession();
@@ -1404,6 +1431,7 @@ function projectView() {
   };
   const delp = box.querySelector("[data-delp]");
   if (delp) delp.onclick = () => {
+    if (!confirm(tr("confirmDeleteProject"))) return;
     state.data.projects = state.data.projects.filter((p) => p.id !== project.id);
     save(state.data);
     state.view = "projects";
@@ -1449,6 +1477,7 @@ function taskRow(project, taskItem, parent, index, label, isSub, expanded, isLas
     if (sub) sub.onclick = () => openTaskForm(project, null, taskItem);
     row.querySelector("[data-ed]").onclick = () => openTaskForm(project, taskItem, parent);
     row.querySelector("[data-del]").onclick = () => {
+      if (!confirm(tr("confirmDeleteTask"))) return;
       if (parent) parent.children = parent.children.filter((x) => x.id !== taskItem.id);
       else project.tasks = project.tasks.filter((x) => x.id !== taskItem.id);
       rollupProject(project);
@@ -1625,16 +1654,20 @@ function mountFileBox(host, files, onChange) {
   paint();
 }
 
-function ganttHtml(project) {
+function ganttHtml(project, opts) {
   computeCritical(project);
   const dates = collectDates(project);
   if (!dates.length) return `<p class="muted">—</p>`;
+  const compact = !!(opts && opts.compact);
   const min = startOfMonth(new Date(Math.min(...dates)));
   const max = endOfMonth(new Date(Math.max(...dates)));
   const days = enumerateDays(min, max);
   const mobile = window.matchMedia("(max-width: 800px)").matches;
-  const dayW = mobile ? 14 : 16;
-  const lockW = mobile ? 110 : 484;
+  const hideDates = compact || mobile;
+  const nameW = compact ? 168 : mobile ? 110 : 220;
+  const dateW = hideDates ? 0 : 132;
+  const dayW = compact ? 10 : mobile ? 14 : 16;
+  const lockW = nameW + (hideDates ? 0 : dateW * 2);
   const rowH = mobile ? 28 : 24;
   const headH = 48;
   const scaleW = days.length * dayW;
@@ -1708,8 +1741,8 @@ function ganttHtml(project) {
       return `<div class="gantt-row ${depth ? "sub" : ""} ${task.critical ? "is-critical" : ""}">
         <div class="gantt-sticky-name">
           <div class="gantt-name">${twist}<span class="gantt-name-text">${esc(task.name)}</span>${msIcon}${count}</div>
-          <div class="gantt-col gantt-dates-p">${dateRange(planStart(task), planEnd(task))}</div>
-          <div class="gantt-col gantt-dates-a">${dateRange(task.actualStart, task.actualEnd)}</div>
+          ${hideDates ? "" : `<div class="gantt-col gantt-dates-p">${dateRange(planStart(task), planEnd(task))}</div>
+          <div class="gantt-col gantt-dates-a">${dateRange(task.actualStart, task.actualEnd)}</div>`}
         </div>
         <div class="gantt-track" style="width:${scaleW}px">
           ${monthLines}
@@ -1747,13 +1780,13 @@ function ganttHtml(project) {
     ? `<svg class="gantt-links" width="${lockW + scaleW}" height="${svgH}" viewBox="0 0 ${lockW + scaleW} ${svgH}" preserveAspectRatio="none">${links.join("")}</svg>`
     : "";
 
-  return `<div class="gantt" style="--day-w:${dayW}px">
+  return `<div class="gantt${compact ? " gantt-compact" : ""}" style="--day-w:${dayW}px;--name-w:${nameW}px;--date-w:${dateW}px;--lock-w:${lockW}px">
     <div class="gantt-scroll">
       <div class="gantt-head">
         <div class="gantt-sticky-name">
           <div class="gantt-name">${tr("taskName")}</div>
-          <div class="gantt-col gantt-dates-p">${tr("planned")}</div>
-          <div class="gantt-col gantt-dates-a">${tr("actual")}</div>
+          ${hideDates ? "" : `<div class="gantt-col gantt-dates-p">${tr("planned")}</div>
+          <div class="gantt-col gantt-dates-a">${tr("actual")}</div>`}
         </div>
         <div class="gantt-scale" style="width:${scaleW}px">
           <div class="gantt-years">${yearBand}</div>
@@ -1979,10 +2012,10 @@ function openTaskForm(project, taskItem, parent) {
     </div>
     <p class="muted">${tr("dateHint")}: dd/mm/yyyy</p>
     <label>${tr("status")}<select name="status">
-      <option value="not_started">${tr("not_started")}</option>
-      <option value="in_progress">${tr("in_progress")}</option>
-      <option value="done">${tr("done")}</option>
-      <option value="delayed">${tr("delayed")}</option>
+      <option value="not_started" ${(tk.status || "not_started") === "not_started" ? "selected" : ""}>${tr("not_started")}</option>
+      <option value="in_progress" ${tk.status === "in_progress" ? "selected" : ""}>${tr("in_progress")}</option>
+      <option value="done" ${tk.status === "done" ? "selected" : ""}>${tr("done")}</option>
+      <option value="delayed" ${tk.status === "delayed" ? "selected" : ""}>${tr("delayed")}</option>
     </select></label>
     <h4>${tr("predecessors")}</h4>
     <div class="pred-box">${predRows}</div>
@@ -2012,12 +2045,16 @@ function openTaskForm(project, taskItem, parent) {
     }
     if (!payload.plannedStart) payload.plannedStart = payload.baseStart || "";
     if (!payload.plannedEnd) payload.plannedEnd = payload.baseEnd || payload.plannedStart || "";
-    payload.status = fd.get("status");
+    payload.status = fd.get("status") || tk.status || "not_started";
     payload.percent = Math.max(0, Math.min(100, Number(fd.get("percent") || 0)));
     if (payload.milestone && payload.plannedStart) payload.plannedEnd = payload.plannedStart;
     if (!rolled) {
       payload.plannedCost = Number(fd.get("plannedCost") || 0);
       payload.actualCost = Number(fd.get("actualCost") || 0);
+    }
+    if (hasPastActualEnd(payload)) {
+      payload.status = "done";
+      payload.percent = 100;
     }
     if (taskItem) Object.assign(taskItem, payload);
     else {
@@ -2049,7 +2086,12 @@ function openTaskForm(project, taskItem, parent) {
 
 function showForm(inner, onSave, opts) {
   const hideSave = !!(opts && opts.hideSave);
+  const closeModal = () => {
+    state.modal = null;
+    render();
+  };
   const modal = el(`<div class="modal-bg"><form class="modal card">
+    <button class="modal-x" type="button" data-cancel aria-label="${esc(tr("close"))}">×</button>
     ${inner}
     <p class="error"></p>
     <div class="row" style="margin-top:12px">
@@ -2057,10 +2099,13 @@ function showForm(inner, onSave, opts) {
       <button class="btn ${hideSave ? "" : "secondary"}" type="button" data-cancel>${hideSave ? tr("close") : tr("cancel")}</button>
     </div>
   </form></div>`);
-  modal.querySelector("[data-cancel]").onclick = () => {
-    state.modal = null;
-    render();
-  };
+  modal.querySelectorAll("[data-cancel]").forEach((btn) => {
+    btn.onclick = closeModal;
+  });
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeModal();
+  });
+  modal.querySelector("form").addEventListener("click", (e) => e.stopPropagation());
   modal.querySelector("form").onsubmit = (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -2206,10 +2251,13 @@ function reportsView() {
     </div>
     ${single ? `<h1 class="report-title">${esc(list[0].name)}</h1>
       <p class="muted">${esc(list[0].hospital || "")}${list[0].location ? " · " + esc(list[0].location) : ""}</p>` : `<h1 class="report-title">${tr("allProjects")}</h1>`}
-    <div class="card table-scroll" style="padding:8px 16px; margin-top:16px">
+    <div class="card table-scroll report-table-wrap" style="padding:8px 16px; margin-top:16px">
       ${reportTable(list, !!single, state.reportShowSubs)}
     </div>
-    ${single && state.reportShowGantt ? `<h3>${tr("gantt")}</h3><div class="card gantt-wrap report-gantt">${ganttHtml(list[0])}</div>` : ""}
+    ${single && state.reportShowGantt ? `<div class="report-gantt-page">
+      <h3>${tr("gantt")}</h3>
+      <div class="card gantt-wrap report-gantt">${ganttHtml(list[0], { compact: true })}</div>
+    </div>` : ""}
   </div>`);
   const sel = box.querySelector("select[name=which]");
   sel.value = projects.some((p) => p.id === selected) ? selected : "all";
@@ -2277,6 +2325,7 @@ function usersView() {
     row.querySelector("[data-ed]").onclick = () => openUserForm(u);
     const del = row.querySelector("[data-del]");
     if (del) del.onclick = () => {
+      if (!confirm(tr("confirmDelete"))) return;
       state.data.users = state.data.users.filter((x) => x.id !== u.id);
       save(state.data);
       render();
@@ -2299,6 +2348,7 @@ function usersView() {
         alert(tr("lastDevice"));
         return;
       }
+      if (!confirm(tr("confirmDelete"))) return;
       state.data.devices = state.data.devices.filter((x) => x.id !== d.id);
       (state.data.users || []).forEach((u) => {
         if (u.deviceScope === d.id) u.deviceScope = "all";
