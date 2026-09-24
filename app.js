@@ -60,14 +60,16 @@ const I18N = {
     actual: "فعلي",
     baseline: "خط الأساس",
     setBaseline: "تحديث خط الأساس",
-    baselineSaved: "تم تحديث خط الأساس من الجدول الحالي.",
+    baselineSaved: "تم نسخ التواريخ المتوقعة إلى خط الأساس. الجدول المتوقع لم يُمسح.",
+    baselineConfirm: "سيتم استبدال خط الأساس بالتواريخ المتوقعة الحالية. الجدول المتوقع والحقيقي لن يُمسحا.",
+    baselineNoPlan: "لا توجد تواريخ متوقعة لنسخها. لم يُغيَّر خط الأساس حتى لا يُمسح.",
     resetDates: "إعادة ضبط التواريخ",
-    resetDatesConfirm: "سيتم مسح التواريخ المتوقعة والحقيقية لكل المهام. خط الأساس يبقى كما هو.",
-    resetDatesOk: "تم مسح التواريخ المتوقعة والحقيقية. خط الأساس لم يُغيَّر.",
+    resetDatesConfirm: "سيتم استبدال التواريخ المتوقعة بخط الأساس، ومسح التواريخ الحقيقية. خط الأساس يبقى كما هو.",
+    resetDatesOk: "عُدّل الجدول المتوقع ليطابق خط الأساس، ومُسحت التواريخ الحقيقية.",
     milestone: "حدث هام",
     baseStart: "بداية خط الأساس",
     baseEnd: "نهاية خط الأساس",
-    baselineHint: "عدّل تواريخ خط الأساس من داخل المهمة، أو اضغط «تحديث خط الأساس» لنسخ الجدول الحالي. «إعادة ضبط التواريخ» تمسح المتوقع والحقيقي وتبقي خط الأساس.",
+    baselineHint: "«تحديث خط الأساس» ينسخ المتوقع إلى خط الأساس دون مسح المتوقع. «إعادة ضبط التواريخ» تجعل المتوقع يطابق خط الأساس وتمسح الحقيقي.",
     predecessors: "الاعتماديات (Predecessors)",
     predType: "النوع",
     lag: "التأخير/التقديم (أيام)",
@@ -236,14 +238,16 @@ const I18N = {
     actual: "Actual",
     baseline: "Baseline",
     setBaseline: "Update baseline",
-    baselineSaved: "Baseline updated from the current plan.",
+    baselineSaved: "Baseline copied from the current planned dates. Planned dates were not cleared.",
+    baselineConfirm: "Baseline will be replaced by the current planned dates. Planned and actual dates will not be cleared.",
+    baselineNoPlan: "There are no planned dates to copy. Baseline was not changed, so it is not wiped.",
     resetDates: "Reset dates",
-    resetDatesConfirm: "This clears planned and actual dates on every task. Baseline dates stay as they are.",
-    resetDatesOk: "Planned and actual dates were cleared. Baseline was not changed.",
+    resetDatesConfirm: "Planned dates will be replaced by the baseline, and actual dates will be cleared. Baseline stays as it is.",
+    resetDatesOk: "Planned dates now match the baseline. Actual dates were cleared.",
     milestone: "Key event",
     baseStart: "Baseline start",
     baseEnd: "Baseline end",
-    baselineHint: "Edit baseline dates inside the task, or tap Update baseline to copy the current plan. Reset dates clears planned and actual dates and keeps the baseline.",
+    baselineHint: "Update baseline copies planned dates onto the baseline without clearing the plan. Reset dates makes planned dates match the baseline and clears actual dates.",
     predecessors: "Predecessors",
     predType: "Type",
     lag: "Lag / lead (days)",
@@ -581,16 +585,20 @@ function computeCritical(project) {
 }
 
 function setProjectBaseline(project) {
+  let copied = 0;
   flattenTasks(project).forEach((t) => {
-    t.baseStart = t.plannedStart || "";
-    t.baseEnd = t.plannedEnd || "";
+    if (!t.plannedStart && !t.plannedEnd) return;
+    if (t.plannedStart) t.baseStart = t.plannedStart;
+    t.baseEnd = t.plannedEnd || t.plannedStart || t.baseEnd || "";
+    copied += 1;
   });
+  return copied;
 }
 
 function resetDatesKeepBaseline(project) {
   flattenTasks(project).forEach((t) => {
-    t.plannedStart = "";
-    t.plannedEnd = "";
+    t.plannedStart = t.baseStart || "";
+    t.plannedEnd = t.baseEnd || "";
     t.actualStart = "";
     t.actualEnd = "";
   });
@@ -1294,7 +1302,7 @@ function projectView() {
         <button class="btn secondary" data-files>${tr("projectFiles")}${((project.docFiles || []).length + (project.costFiles || []).length) ? ` (${(project.docFiles || []).length + (project.costFiles || []).length})` : ""}</button>
         <button class="btn secondary" data-rep>${tr("projectReport")}</button>
         ${isPm() ? `<button class="btn secondary" data-base>${tr("setBaseline")}</button>
-        <button class="btn secondary" data-reset-dates>${tr("resetDates")}</button>
+        <button class="btn danger" data-reset-dates>${tr("resetDates")}</button>
         <button class="btn secondary" data-copy>${tr("copyProject")}</button>
         <button class="btn danger" data-delp>${tr("delete")}</button>` : ""}
       </div>
@@ -1355,7 +1363,12 @@ function projectView() {
   if (copy) copy.onclick = () => copyProject(project);
   const base = box.querySelector("[data-base]");
   if (base) base.onclick = () => {
-    setProjectBaseline(project);
+    if (!confirm(tr("baselineConfirm"))) return;
+    const copied = setProjectBaseline(project);
+    if (!copied) {
+      alert(tr("baselineNoPlan"));
+      return;
+    }
     save(state.data, true);
     alert(tr("baselineSaved"));
     render();
