@@ -239,7 +239,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 .gantt-band.year { background: #123040; color: #fff; font-size: 11px; font-weight: 700; padding: 0; height: 16px; }
 .gantt-band.month { background: #e6eef2; color: var(--ink); font-size: 11px; font-weight: 700; padding: 0; height: 16px; border-right-color: #8aa0ad; }
 .gantt-day { flex: 0 0 var(--day-w); width: var(--day-w); height: 16px; font-size: 9px; color: var(--muted); padding: 0; line-height: 16px; background: #f7fafb; }
-.gantt-day.weekend { background: #eef2f5; color: #8a98a3; }
+.gantt-day.gantt-gap { background: #eef2f5; color: #94a3b8; letter-spacing: 1px; }
 .gantt-day.month-start { border-left: 1px solid #8aa0ad; }
 .gantt-track {
   position: relative;
@@ -357,8 +357,9 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
     width: 100%;
     max-height: 92vh;
     border-radius: 16px 16px 0 0;
-    padding: 44px 14px calc(16px + env(safe-area-inset-bottom));
+    padding: 0;
   }
+  .modal-body { padding: 4px 14px calc(16px + env(safe-area-inset-bottom)); }
   .info-table th { white-space: normal; width: 42%; }
   .info-add { grid-template-columns: 1fr; }
   .stack-table thead { display: none; }
@@ -463,11 +464,25 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   position: fixed; inset: 0; background: rgba(18,32,43,0.45);
   display: grid; place-items: center; padding: 16px; z-index: 20;
 }
-.modal { position: relative; width: min(720px, 100%); max-height: 90vh; overflow: auto; padding: 44px 22px 22px; }
+.modal {
+  position: relative;
+  width: min(720px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  padding: 0;
+}
+.modal-head {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 8px 0;
+  background: #fff;
+}
+.modal-body { padding: 4px 22px 22px; }
 .modal-x {
-  position: absolute;
-  top: 8px;
-  inset-inline-end: 8px;
+  position: static;
   width: 36px;
   height: 36px;
   border: 0;
@@ -477,7 +492,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   font-size: 22px;
   line-height: 1;
   cursor: pointer;
-  z-index: 3;
+  flex: 0 0 auto;
 }
 .modal-x:hover { background: #d5dee4; }
 .info-table {
@@ -557,13 +572,38 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 [dir="rtl"] th, [dir="rtl"] td { text-align: right; }
 
 @media print {
-  html { zoom: var(--print-zoom, 1); }
+  html, body {
+    overflow: visible !important;
+    background: #fff;
+    zoom: 1;
+  }
+  html[dir="ltr"] { zoom: var(--print-zoom, 1); }
   .topbar, .no-print, .save-toast { display: none !important; }
-  .page { padding: 0; max-width: none; }
-  .card { box-shadow: none; }
-  .report-gantt-page { break-before: page; page-break-before: always; }
+  .page { padding: 0; max-width: none; overflow: visible !important; }
+  .card { box-shadow: none; overflow: visible !important; }
+  .table-scroll { overflow: visible !important; }
+  .print-sheet { break-after: page; page-break-after: always; }
+  .print-sheet:last-child { break-after: auto; page-break-after: auto; }
+  .report-cover { break-after: page; page-break-after: always; }
+  .report-tasks-page { break-after: page; page-break-after: always; }
+  .report-gantt-page { break-before: page; page-break-before: always; break-after: auto; }
+  .report-table {
+    width: 100%;
+    font-size: 9px;
+    table-layout: auto;
+    border-collapse: collapse;
+  }
+  .report-table th, .report-table td {
+    padding: 4px 5px;
+    word-break: break-word;
+    white-space: normal;
+    overflow: visible;
+  }
   .gantt-wrap, .report-gantt { height: auto !important; max-height: none !important; overflow: visible !important; }
-  .gantt, .gantt-scroll { overflow: visible !important; height: auto; }
+  .gantt, .gantt-scroll { overflow: visible !important; height: auto; max-width: 100%; }
+  .gantt-sticky-name { position: static !important; box-shadow: none; }
+  .gantt-head { position: static !important; }
   .gantt-compact .gantt-dates-p,
   .gantt-compact .gantt-dates-a { display: none !important; }
+  [dir="rtl"] .gantt { direction: ltr; unicode-bidi: isolate; }
 }

@@ -100,6 +100,10 @@ const I18N = {
     printPages2: "صفحتان",
     printPages3: "3 صفحات",
     printPages4: "4 صفحات",
+    reportSummary: "ملخص المشروع",
+    reportTasksPage: "مهام المشروع",
+    overallProgress: "تقدم المشروع",
+    taskCount: "عدد المهام",
     deviceScope: "قسم الجهاز",
     allDevices: "كل الأجهزة",
     addDevice: "إضافة نوع جهاز",
@@ -282,6 +286,10 @@ const I18N = {
     printPages2: "Two pages",
     printPages3: "3 pages",
     printPages4: "4 pages",
+    reportSummary: "Project summary",
+    reportTasksPage: "Project tasks",
+    overallProgress: "Project progress",
+    taskCount: "Task count",
     deviceScope: "Device department",
     allDevices: "All devices",
     addDevice: "Add device type",
@@ -448,11 +456,15 @@ function hasPastActualEnd(task) {
   return d.getTime() < today.getTime();
 }
 
-function applyDoneFromActual(task) {
+function applyActualStatus(task) {
   if (hasChildren(task)) return;
   if (hasPastActualEnd(task)) {
     task.status = "done";
     task.percent = 100;
+    return;
+  }
+  if (task.actualStart && (task.status === "not_started" || !task.status)) {
+    task.status = "in_progress";
   }
 }
 
@@ -460,7 +472,7 @@ function rollupTask(task) {
   if (!task.children) task.children = [];
   task.children.forEach(rollupTask);
   if (!hasChildren(task)) {
-    applyDoneFromActual(task);
+    applyActualStatus(task);
     return task;
   }
   task.plannedCost = task.children.reduce((s, c) => s + Number(c.plannedCost || 0), 0);
@@ -469,6 +481,9 @@ function rollupTask(task) {
   if (!task.plannedEnd) task.plannedEnd = maxDate(task.children.map((c) => c.plannedEnd));
   if (!task.actualStart) task.actualStart = minDate(task.children.map((c) => c.actualStart));
   if (!task.actualEnd) task.actualEnd = maxDate(task.children.map((c) => c.actualEnd));
+  task.status = deriveStatus(task);
+  const n = task.children.length;
+  task.percent = n ? Math.round(task.children.reduce((s, c) => s + Number(c.percent || 0), 0) / n) : 0;
   return task;
 }
 
@@ -1654,23 +1669,68 @@ function mountFileBox(host, files, onChange) {
   paint();
 }
 
+function keyGanttDates(project) {
+  const set = new Set();
+  flattenTasks(project).forEach((t) => {
+    ["plannedStart", "plannedEnd", "actualStart", "actualEnd", "baseStart", "baseEnd"].forEach((k) => {
+      if (t[k]) set.add(t[k]);
+    });
+  });
+  return [...set]
+    .map(parseDay)
+    .filter(Boolean)
+    .sort((a, b) => a - b);
+}
+
+function sparseGanttCols(project) {
+  const keys = keyGanttDates(project);
+  if (!keys.length) return [];
+  const cols = [];
+  keys.forEach((d, i) => {
+    if (i) {
+      const prev = keys[i - 1];
+      const gap = Math.round((d - prev) / 86400000);
+      if (gap > 1) cols.push({ gap: true, date: prev });
+    }
+    cols.push({ gap: false, date: d });
+  });
+  return cols;
+}
+
+function ganttColIndex(cols, isoDate) {
+  const t = parseDay(isoDate);
+  if (!t) return null;
+  const ms = t.getTime();
+  let best = null;
+  for (let i = 0; i < cols.length; i++) {
+    if (cols[i].gap) continue;
+    const ct = cols[i].date.getTime();
+    if (ct === ms) return i;
+    if (ct <= ms) best = i;
+  }
+  return best;
+}
+
 function ganttHtml(project, opts) {
   computeCritical(project);
-  const dates = collectDates(project);
-  if (!dates.length) return `<p class="muted">—</p>`;
   const compact = !!(opts && opts.compact);
-  const min = startOfMonth(new Date(Math.min(...dates)));
-  const max = endOfMonth(new Date(Math.max(...dates)));
-  const days = enumerateDays(min, max);
+  const sparse = compact ? sparseGanttCols(project) : null;
+  const cols = sparse && sparse.length ? sparse : null;
+  const dates = cols && cols.length ? cols.map((c) => c.date) : collectDates(project);
+  if (!dates.length) return `<p class="muted">—</p>`;
+  const min = cols ? cols[0].date : startOfMonth(new Date(Math.min(...dates)));
+  const max = cols ? cols[cols.length - 1].date : endOfMonth(new Date(Math.max(...dates)));
+  const days = cols ? cols.map((c) => c.date) : enumerateDays(min, max);
   const mobile = window.matchMedia("(max-width: 800px)").matches;
   const hideDates = compact || mobile;
-  const nameW = compact ? 168 : mobile ? 110 : 220;
+  const nameW = compact ? 140 : mobile ? 110 : 220;
   const dateW = hideDates ? 0 : 132;
-  const dayW = compact ? 10 : mobile ? 14 : 16;
+  const colCount = days.length;
   const lockW = nameW + (hideDates ? 0 : dateW * 2);
+  const dayW = compact ? Math.max(8, Math.min(16, Math.floor((720 - lockW) / Math.max(colCount, 1)))) : mobile ? 14 : 16;
   const rowH = mobile ? 28 : 24;
   const headH = 48;
-  const scaleW = days.length * dayW;
+  const scaleW = colCount * dayW;
   const years = groupDays(days, (d) => String(d.getFullYear()));
   const months = groupDays(days, (d) => `${d.getFullYear()}-${d.getMonth()}`);
   const monthStarts = new Set();
@@ -1688,6 +1748,7 @@ function ganttHtml(project, opts) {
     .join("");
   const dayBand = days
     .map((d, i) => {
+      if (cols && cols[i] && cols[i].gap) return `<span class="gantt-day gantt-gap">··</span>`;
       const weekend = d.getDay() === 0 || d.getDay() === 6 ? " weekend" : "";
       const monthStart = monthStarts.has(i) ? " month-start" : "";
       return `<span class="gantt-day${weekend}${monthStart}">${pad2(d.getDate())}</span>`;
@@ -1699,27 +1760,29 @@ function ganttHtml(project, opts) {
     .join("");
 
   const vis = visibleTaskRows(project);
-  const xOf = (isoDate, edge) => {
+  const idxOf = (isoDate) => (cols ? ganttColIndex(cols, isoDate) : (() => {
     const a = parseDay(isoDate);
     if (!a) return null;
-    const i = Math.round((a - min) / 86400000);
+    return Math.round((a - min) / 86400000);
+  })());
+  const xOf = (isoDate, edge) => {
+    const i = idxOf(isoDate);
+    if (i == null) return null;
     return lockW + (edge === "end" ? i + 1 : i) * dayW;
   };
   const barHtml = (start, end, cls, pct) => {
-    const a = parseDay(start);
-    if (!a) return "";
-    const b = parseDay(end) || a;
-    const i1 = Math.round((a - min) / 86400000);
-    const i2 = Math.round((b - min) / 86400000);
+    const i1 = idxOf(start);
+    if (i1 == null) return "";
+    const i2raw = idxOf(end);
+    const i2 = i2raw == null ? i1 : i2raw;
     const left = Math.max(0, i1) * dayW;
     const width = Math.max(1, i2 - i1 + 1) * dayW;
     const fill = pct > 0 ? `<i class="bar-fill" style="width:${Math.min(100, pct)}%"></i>` : "";
     return `<div class="bar ${cls}" style="left:${left}px;width:${width}px" title="${fmtDate(start)} → ${fmtDate(end)}">${fill}</div>`;
   };
   const diamondHtml = (date, cls) => {
-    const a = parseDay(date);
-    if (!a) return "";
-    const i = Math.round((a - min) / 86400000);
+    const i = idxOf(date);
+    if (i == null) return "";
     const left = i * dayW + Math.max(2, dayW / 2 - 6);
     return `<div class="ms-mark ${cls}" style="left:${left}px" title="${fmtDate(date)}"></div>`;
   };
@@ -2055,6 +2118,8 @@ function openTaskForm(project, taskItem, parent) {
     if (hasPastActualEnd(payload)) {
       payload.status = "done";
       payload.percent = 100;
+    } else if (payload.actualStart && (payload.status === "not_started" || !payload.status)) {
+      payload.status = "in_progress";
     }
     if (taskItem) Object.assign(taskItem, payload);
     else {
@@ -2091,12 +2156,16 @@ function showForm(inner, onSave, opts) {
     render();
   };
   const modal = el(`<div class="modal-bg"><form class="modal card">
-    <button class="modal-x" type="button" data-cancel aria-label="${esc(tr("close"))}">×</button>
+    <div class="modal-head">
+      <button class="modal-x" type="button" data-cancel aria-label="${esc(tr("close"))}">×</button>
+    </div>
+    <div class="modal-body">
     ${inner}
     <p class="error"></p>
     <div class="row" style="margin-top:12px">
       ${hideSave ? "" : `<button class="btn" type="submit">${tr("save")}</button>`}
       <button class="btn ${hideSave ? "" : "secondary"}" type="button" data-cancel>${hideSave ? tr("close") : tr("cancel")}</button>
+    </div>
     </div>
   </form></div>`);
   modal.querySelectorAll("[data-cancel]").forEach((btn) => {
@@ -2131,6 +2200,34 @@ function showForm(inner, onSave, opts) {
   };
   state.modal = modal;
   render();
+}
+
+function reportCoverHtml(project) {
+  const s = projectStats(project);
+  const extra = (project.extra || [])
+    .filter((x) => extraLabel(x) && String(x.value || "").trim())
+    .map((x) => `<tr><th>${esc(extraLabel(x))}</th><td>${esc(x.value)}</td></tr>`)
+    .join("");
+  return `<section class="report-cover print-sheet">
+    <h1 class="report-title">${esc(project.name)}</h1>
+    <h3>${tr("reportSummary")}</h3>
+    <table class="info-table report-info">
+      <tr><th>${tr("projectName")}</th><td>${esc(project.name)}</td></tr>
+      <tr><th>${tr("hospital")}</th><td>${esc(project.hospital || "")}</td></tr>
+      <tr><th>${tr("location")}</th><td>${esc(project.location || "")}</td></tr>
+      <tr><th>${tr("device")}</th><td>${esc(deviceLabel(project.device))}</td></tr>
+      ${extra}
+    </table>
+    <h3>${tr("overallProgress")}</h3>
+    <div class="kpis">
+      <div class="card kpi"><span class="muted">${tr("progress")}</span><b>${s.progress}%</b></div>
+      <div class="card kpi"><span class="muted">${tr("taskCount")}</span><b>${s.count}</b></div>
+      <div class="card kpi"><span class="muted">${tr("plannedCost")}</span><b>${money(s.plannedCost)}</b></div>
+      <div class="card kpi"><span class="muted">${tr("actualCost")}</span><b>${money(s.actualCost)}</b></div>
+      <div class="card kpi"><span class="muted">${tr("plannedDays")}</span><b>${s.plannedDays} ${tr("days")}</b></div>
+      <div class="card kpi"><span class="muted">${tr("actualDays")}</span><b>${s.actualDays} ${tr("days")}</b></div>
+    </div>
+  </section>`;
 }
 
 function reportTable(projects, withTasks, showSubs) {
@@ -2193,17 +2290,38 @@ function reportTable(projects, withTasks, showSubs) {
 function printReport() {
   const pages = state.printFit;
   const root = document.documentElement;
-  const reset = () => root.style.setProperty("--print-zoom", "1");
+  const ganttBox = document.querySelector(".report-gantt .gantt");
+  const reset = () => {
+    root.style.setProperty("--print-zoom", "1");
+    if (ganttBox) {
+      ganttBox.style.transform = "";
+      ganttBox.style.transformOrigin = "";
+    }
+  };
   reset();
+  if (ganttBox) {
+    const w = Math.max(ganttBox.scrollWidth, ganttBox.offsetWidth, 1);
+    const maxW = 980;
+    if (w > maxW) {
+      const s = maxW / w;
+      ganttBox.style.transform = `scale(${s})`;
+      ganttBox.style.transformOrigin = "top left";
+    }
+  }
   if (!pages || pages === "auto") {
     window.print();
+    const done = () => {
+      reset();
+      window.removeEventListener("afterprint", done);
+    };
+    window.addEventListener("afterprint", done);
     return;
   }
   const report = document.querySelector(".report-page") || document.querySelector(".page");
   const pageH = 980;
   const h = Math.max(report ? report.scrollHeight : 1, 1);
-  const zoom = Math.min(1, Math.max(0.4, (Number(pages) * pageH) / h));
-  root.style.setProperty("--print-zoom", String(zoom));
+  const zoom = Math.min(1, Math.max(0.45, (Number(pages) * pageH) / h));
+  if (state.lang !== "ar") root.style.setProperty("--print-zoom", String(zoom));
   const done = () => {
     reset();
     window.removeEventListener("afterprint", done);
@@ -2223,7 +2341,7 @@ function reportsView() {
       ? projects
       : projects.filter((p) => p.id === selected);
   const single = selected !== "all" && list[0];
-  if (single && state.reportShowGantt) {
+  if (single) {
     list[0].tasks.forEach((t) => {
       if (hasChildren(t)) state.expanded[t.id] = true;
     });
@@ -2249,15 +2367,17 @@ function reportsView() {
         <button class="btn" type="button" data-print>${tr("print")}</button>
       </div>
     </div>
-    ${single ? `<h1 class="report-title">${esc(list[0].name)}</h1>
-      <p class="muted">${esc(list[0].hospital || "")}${list[0].location ? " · " + esc(list[0].location) : ""}</p>` : `<h1 class="report-title">${tr("allProjects")}</h1>`}
-    <div class="card table-scroll report-table-wrap" style="padding:8px 16px; margin-top:16px">
-      ${reportTable(list, !!single, state.reportShowSubs)}
-    </div>
-    ${single && state.reportShowGantt ? `<div class="report-gantt-page">
+    ${single ? reportCoverHtml(list[0]) : `<h1 class="report-title">${tr("allProjects")}</h1>`}
+    <section class="report-tasks-page print-sheet">
+      ${single ? `<h3>${tr("reportTasksPage")}</h3>` : ""}
+      <div class="card table-scroll report-table-wrap" style="padding:8px 16px; margin-top:16px">
+        ${reportTable(list, !!single, state.reportShowSubs)}
+      </div>
+    </section>
+    ${single && state.reportShowGantt ? `<section class="report-gantt-page print-sheet">
       <h3>${tr("gantt")}</h3>
       <div class="card gantt-wrap report-gantt">${ganttHtml(list[0], { compact: true })}</div>
-    </div>` : ""}
+    </section>` : ""}
   </div>`);
   const sel = box.querySelector("select[name=which]");
   sel.value = projects.some((p) => p.id === selected) ? selected : "all";
