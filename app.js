@@ -227,6 +227,11 @@ const I18N = {
     holidayNameAr: "اسم العطلة بالعربي",
     holidayNameEn: "اسم العطلة بالإنجليزي",
     holidayDate: "تاريخ العطلة",
+    holidayFrom: "من",
+    holidayTo: "إلى",
+    progressWork: "المهام",
+    progressCost: "الكلف",
+    progressTime: "الزمن",
     sectionDates: "التواريخ",
     sectionCost: "الكلف"
   },
@@ -458,6 +463,11 @@ const I18N = {
     holidayNameAr: "Holiday name in Arabic",
     holidayNameEn: "Holiday name in English",
     holidayDate: "Holiday date",
+    holidayFrom: "From",
+    holidayTo: "To",
+    progressWork: "Tasks",
+    progressCost: "Costs",
+    progressTime: "Time",
     sectionDates: "Dates",
     sectionCost: "Costs"
   }
@@ -518,11 +528,26 @@ function isWeekend(d) {
   return w === 5 || w === 6;
 }
 
+function eachIsoDay(start, end, fn) {
+  let a = parseDay(start);
+  let b = parseDay(end) || a;
+  if (!a) return;
+  if (b < a) {
+    const t = a;
+    a = b;
+    b = t;
+  }
+  const cur = new Date(a.getTime());
+  while (cur <= b) {
+    fn(iso(cur), cur);
+    cur.setDate(cur.getDate() + 1);
+  }
+}
+
 function holidayIsoSet() {
   const set = new Set();
   (state.data.holidays || []).forEach((h) => {
-    const dt = parseDay(h.date);
-    if (dt) set.add(iso(dt));
+    eachIsoDay(h.date, h.end || h.date, (d) => set.add(d));
   });
   return set;
 }
@@ -537,9 +562,51 @@ function isNonWorking(d) {
   return isWeekend(d) || isHoliday(d);
 }
 
-function holidayLabel(h) {
-  if (!h) return "";
-  return state.lang === "ar" ? (h.ar || h.en || "") : (h.en || h.ar || "");
+function holidayRangeLabel(h) {
+  const a = h && h.date;
+  const b = (h && (h.end || h.date)) || "";
+  if (!a) return "—";
+  if (!b || b === a) return fmtDate(a);
+  return `${fmtDate(a)} → ${fmtDate(b)}`;
+}
+
+function taskHasStarted(task) {
+  if (!task) return false;
+  if (hasChildren(task)) return (task.children || []).some(taskHasStarted);
+  if (task.actualStart) return true;
+  if (Number(task.percent || 0) > 0) return true;
+  if (Number(task.actualCost || 0) > 0) return true;
+  const st = task.status || "not_started";
+  return st !== "not_started";
+}
+
+function costVariance(planned, actual) {
+  return Number(actual || 0) - Number(planned || 0);
+}
+
+function varianceOf(task) {
+  if (!taskHasStarted(task)) return null;
+  if (hasChildren(task)) {
+    return (task.children || []).reduce((sum, child) => {
+      const v = varianceOf(child);
+      return v == null ? sum : sum + v;
+    }, 0);
+  }
+  return costVariance(task.plannedCost, task.actualCost);
+}
+
+function varText(n) {
+  return n == null || !Number.isFinite(Number(n)) ? "—" : money(n);
+}
+
+function varClass(n) {
+  if (n == null || !Number.isFinite(Number(n)) || Number(n) === 0) return "";
+  return Number(n) > 0 ? "var-over" : "var-under";
+}
+
+function varCell(n, extra) {
+  const cls = varClass(n);
+  return `<td class="${cls}" ${extra || ""}>${varText(n)}</td>`;
 }
 
 function userDisplayName(u) {
@@ -560,16 +627,6 @@ function syncUserNames(u) {
   if (!u.nameAr && u.name) u.nameAr = String(u.name).trim();
   u.name = u.nameAr || u.nameEn || String(u.name || "").trim();
   return u;
-}
-
-function costVariance(planned, actual) {
-  return Number(actual || 0) - Number(planned || 0);
-}
-
-function varCell(n, extra) {
-  const v = Number(n || 0);
-  const cls = v > 0 ? "var-over" : v < 0 ? "var-under" : "";
-  return `<td class="${cls}" ${extra || ""}>${money(v)}</td>`;
 }
 
 function nextWorkDay(value) {
@@ -968,9 +1025,15 @@ function projectStats(project) {
   );
   const done = leaves.filter(isTaskComplete).length;
   const progress = leaves.length ? Math.round((done / leaves.length) * 100) : 0;
+  const variance = leaves.reduce((sum, t) => {
+    const v = varianceOf(t);
+    return v == null ? sum : sum + v;
+  }, 0);
+  const varianceReady = leaves.some(taskHasStarted);
   return {
     plannedCost,
     actualCost,
+    variance: varianceReady ? variance : null,
     plannedDays,
     actualDays,
     progress,
@@ -983,17 +1046,42 @@ function projectStats(project) {
 }
 
 function progressKpisHtml(s) {
-  return `<div class="kpis">
-      <div class="card kpi"><span class="muted">${tr("progress")}</span><b>${s.progress}%</b></div>
-      <div class="card kpi"><span class="muted">${tr("mainTasks")}</span><b>${s.mainCount}</b><span class="kpi-done">${tr("doneCount")}: ${s.mainDone}</span></div>
-      <div class="card kpi"><span class="muted">${tr("subTasks")}</span><b>${s.subCount}</b><span class="kpi-done">${tr("doneCount")}: ${s.subDone}</span></div>
-      <div class="card kpi"><span class="muted">${tr("taskCount")}</span><b>${s.count}</b></div>
-      <div class="card kpi"><span class="muted">${tr("plannedCost")}</span><b>${money(s.plannedCost)}</b></div>
-      <div class="card kpi"><span class="muted">${tr("actualCost")}</span><b>${money(s.actualCost)}</b></div>
-      <div class="card kpi"><span class="muted">${tr("variance")}</span><b class="${costVariance(s.plannedCost, s.actualCost) > 0 ? "var-over" : costVariance(s.plannedCost, s.actualCost) < 0 ? "var-under" : ""}">${money(costVariance(s.plannedCost, s.actualCost))}</b></div>
-      <div class="card kpi"><span class="muted">${tr("plannedDays")}</span><b>${s.plannedDays} ${tr("days")}</b></div>
-      <div class="card kpi"><span class="muted">${tr("actualDays")}</span><b>${s.actualDays} ${tr("days")}</b></div>
-    </div>`;
+  const v = s.variance;
+  return `<div class="progress-board">
+    <div class="card progress-hero">
+      <div class="progress-meter" style="--pct:${Number(s.progress || 0)}"><span>${s.progress}%</span></div>
+      <div class="progress-hero-copy">
+        <h3>${tr("overallProgress")}</h3>
+        <div class="progress-track" title="${s.progress}%"><span class="progress-fill" style="width:${s.progress}%"></span></div>
+        <p class="muted">${tr("doneCount")}: ${s.mainDone + s.subDone} / ${s.mainCount + s.subCount}</p>
+      </div>
+    </div>
+    <div class="progress-groups">
+      <div class="card progress-group">
+        <h4>${tr("progressWork")}</h4>
+        <div class="progress-rows">
+          <div class="progress-row"><span class="muted">${tr("mainTasks")}</span><b>${s.mainCount}</b><span class="kpi-done">${tr("doneCount")}: ${s.mainDone}</span></div>
+          <div class="progress-row"><span class="muted">${tr("subTasks")}</span><b>${s.subCount}</b><span class="kpi-done">${tr("doneCount")}: ${s.subDone}</span></div>
+          <div class="progress-row"><span class="muted">${tr("taskCount")}</span><b>${s.count}</b></div>
+        </div>
+      </div>
+      <div class="card progress-group">
+        <h4>${tr("progressCost")}</h4>
+        <div class="progress-rows">
+          <div class="progress-row"><span class="muted">${tr("plannedCost")}</span><b>${money(s.plannedCost)}</b></div>
+          <div class="progress-row"><span class="muted">${tr("actualCost")}</span><b>${money(s.actualCost)}</b></div>
+          <div class="progress-row"><span class="muted">${tr("variance")}</span><b class="${varClass(v)}">${varText(v)}</b></div>
+        </div>
+      </div>
+      <div class="card progress-group">
+        <h4>${tr("progressTime")}</h4>
+        <div class="progress-rows">
+          <div class="progress-row"><span class="muted">${tr("plannedDays")}</span><b>${s.plannedDays} ${tr("days")}</b></div>
+          <div class="progress-row"><span class="muted">${tr("actualDays")}</span><b>${s.actualDays} ${tr("days")}</b></div>
+        </div>
+      </div>
+    </div>
+  </div>`;
 }
 
 function makeTask(name, ps, pe, as, ae, pc, ac, status, children) {
@@ -1058,6 +1146,9 @@ function seed() {
 function migrate(data) {
   if (!Array.isArray(data.devices) || !data.devices.length) data.devices = defaultDevices();
   if (!Array.isArray(data.holidays)) data.holidays = [];
+  (data.holidays || []).forEach((h) => {
+    if (!h.end) h.end = h.date || "";
+  });
   (data.users || []).forEach((u) => {
     if (u.role === "viewer") {
       u.role = "other";
@@ -1806,7 +1897,6 @@ function projectView() {
     </div>
     <div class="project-main">${
       tab === "overview" ? `<section class="project-panel is-on" data-panel="overview">
-          <h3>${tr("overallProgress")}</h3>
           ${progressKpisHtml(s)}
         </section>` : tab === "info" ? `<section class="project-panel is-on" data-panel="info">
           <div class="row" style="justify-content:space-between">
@@ -1955,7 +2045,7 @@ function taskRow(project, taskItem, parent, index, label, isSub, expanded, isLas
     <td data-label="${esc(tr("slack"))}">${taskItem.slack === "" || taskItem.slack == null ? "—" : taskItem.slack}</td>
     <td data-label="${esc(tr("plannedCost"))}">${money(taskItem.plannedCost)}</td>
     <td data-label="${esc(tr("actualCost"))}">${money(taskItem.actualCost)}</td>
-    ${varCell(costVariance(taskItem.plannedCost, taskItem.actualCost), `data-label="${esc(tr("variance"))}"`)}
+    ${varCell(varianceOf(taskItem), `data-label="${esc(tr("variance"))}"`)}
     ${isPm() ? `<td class="row actions">
       <button class="btn small secondary" data-up>${tr("up")}</button>
       <button class="btn small secondary" data-down>${tr("down")}</button>
@@ -2627,7 +2717,7 @@ function openTaskForm(project, taskItem, parent) {
     <div class="grid-3">
       <label>${tr("plannedCost")}<input type="number" name="plannedCost" value="${tk.plannedCost || 0}" ${disabled}></label>
       <label>${tr("actualCost")}<input type="number" name="actualCost" value="${tk.actualCost || 0}" ${disabled}></label>
-      <p class="var-preview muted">${tr("variance")}: <b>${money(costVariance(tk.plannedCost, tk.actualCost))}</b></p>
+      <p class="var-preview muted">${tr("variance")}: <b class="${varClass(varianceOf(tk))}">${varText(varianceOf(tk))}</b></p>
     </div>
     <h4>${tr("predecessors")}</h4>
     <div class="pred-box">${predRows}</div>
@@ -2806,7 +2896,7 @@ function reportTable(projects, withTasks, showSubs) {
         ${withTasks ? `<td><b>${single ? tr("total") : ""}</b></td>` : ""}
         <td>${money(s.plannedCost)}</td>
         <td>${money(s.actualCost)}</td>
-        <td>${money(s.actualCost - s.plannedCost)}</td>
+        ${varCell(s.variance)}
         <td>${fmtDate(minDate(p.tasks.map((x) => planStart(x))))}</td>
         <td>${fmtDate(maxDate(p.tasks.map((x) => planEnd(x))))}</td>
         <td>${fmtDate(minDate(p.tasks.map((x) => x.actualStart)))}</td>
@@ -2827,7 +2917,7 @@ function reportTable(projects, withTasks, showSubs) {
           <td class="${depth ? "task-indent" : ""}">${mark}${esc(task.name)}</td>
           <td>${money(task.plannedCost)}</td>
           <td>${money(task.actualCost)}</td>
-          <td>${money(Number(task.actualCost || 0) - Number(task.plannedCost || 0))}</td>
+          ${varCell(varianceOf(task))}
           <td>${fmtDate(planStart(task))}</td>
           <td>${fmtDate(planEnd(task))}</td>
           <td>${fmtDate(task.actualStart)}</td>
@@ -2855,7 +2945,7 @@ function reportTasksOnlyTable(project, showSubs) {
         <td class="${depth ? "task-indent" : ""}">${mark}${esc(task.name)}</td>
         <td>${money(task.plannedCost)}</td>
         <td>${money(task.actualCost)}</td>
-        ${varCell(costVariance(task.plannedCost, task.actualCost))}
+        ${varCell(varianceOf(task))}
         <td>${fmtDate(planStart(task))}</td>
         <td>${fmtDate(planEnd(task))}</td>
         <td>${fmtDate(task.actualStart)}</td>
@@ -2891,12 +2981,12 @@ function reportEmailHtml(project) {
   const taskRows = flatRows(project.tasks)
     .filter(({ depth }) => state.reportShowSubs || depth === 0)
     .map(({ task, depth }) => {
-      const v = costVariance(task.plannedCost, task.actualCost);
+      const v = varianceOf(task);
       return `<tr>
         <td>${depth ? "— " : ""}${esc(task.name)}</td>
         <td>${money(task.plannedCost)}</td>
         <td>${money(task.actualCost)}</td>
-        <td>${money(v)}</td>
+        <td>${varText(v)}</td>
         <td>${fmtDate(planStart(task))} → ${fmtDate(planEnd(task))}</td>
         <td>${Number(task.percent || 0)}%</td>
       </tr>`;
@@ -2910,7 +3000,7 @@ function reportEmailHtml(project) {
       <tr><td>${esc(tr("device"))}</td><td>${esc(deviceLabel(project.device))}</td></tr>
       ${extra}
     </table>
-    <p><b>${esc(tr("progress"))}:</b> ${s.progress}% · <b>${esc(tr("variance"))}:</b> ${money(costVariance(s.plannedCost, s.actualCost))} ${esc(tr("currency"))}</p>
+    <p><b>${esc(tr("progress"))}:</b> ${s.progress}% · <b>${esc(tr("variance"))}:</b> ${varText(s.variance)} ${esc(tr("currency"))}</p>
     <h3>${esc(tr("reportTasksPage"))}</h3>
     <table border="1" cellpadding="6" cellspacing="0" width="100%">
       <tr>
@@ -2942,7 +3032,7 @@ function buildEmailReport(project) {
     [tr("progress"), s.progress + "%"],
     [tr("plannedCost"), money(s.plannedCost)],
     [tr("actualCost"), money(s.actualCost)],
-    [tr("variance"), money(costVariance(s.plannedCost, s.actualCost))]
+    [tr("variance"), varText(s.variance)]
   ];
   const taskHead = [tr("taskName"), tr("plannedCost"), tr("actualCost"), tr("variance"), tr("plannedStart"), tr("plannedEnd"), tr("percent")];
   const taskRows = flatRows(project.tasks)
@@ -2951,7 +3041,7 @@ function buildEmailReport(project) {
       (depth ? "— " : "") + task.name,
       money(task.plannedCost),
       money(task.actualCost),
-      money(costVariance(task.plannedCost, task.actualCost)),
+      varText(varianceOf(task)),
       fmtDate(planStart(task)),
       fmtDate(planEnd(task)),
       String(Number(task.percent || 0)) + "%"
@@ -3204,7 +3294,7 @@ function usersView() {
     <p class="hint">${tr("workDaysHint")}</p>
     <div class="card table-scroll" style="padding:8px 16px; margin-top:12px">
       <table class="stack-table">
-        <thead><tr><th>${tr("holidayDate")}</th><th>${tr("holidayNameAr")}</th><th>${tr("holidayNameEn")}</th><th></th></tr></thead>
+        <thead><tr><th>${tr("holidayFrom")} / ${tr("holidayTo")}</th><th>${tr("holidayNameAr")}</th><th>${tr("holidayNameEn")}</th><th></th></tr></thead>
         <tbody data-hols></tbody>
       </table>
     </div>
@@ -3216,7 +3306,7 @@ function usersView() {
     .sort((a, b) => String(a.date).localeCompare(String(b.date)))
     .forEach((h) => {
       const row = el(`<tr>
-        <td data-label="${esc(tr("holidayDate"))}">${fmtDate(h.date)}</td>
+        <td data-label="${esc(tr("holidayDate"))}">${holidayRangeLabel(h)}</td>
         <td data-label="${esc(tr("holidayNameAr"))}">${esc(h.ar || "")}</td>
         <td data-label="${esc(tr("holidayNameEn"))}">${esc(h.en || "")}</td>
         <td class="row actions">
@@ -3308,17 +3398,31 @@ function openUserForm(user) {
 }
 
 function openHolidayForm(holiday) {
-  const h = holiday || { date: "", ar: "", en: "" };
+  const h = holiday || { date: "", end: "", ar: "", en: "" };
   showForm(`
     <h3>${holiday ? tr("edit") : tr("addHoliday")}</h3>
-    <label>${tr("holidayDate")}${dateInput("date", h.date, "")}</label>
+    <div class="grid-2">
+      <label>${tr("holidayFrom")}${dateInput("date", h.date, "")}</label>
+      <label>${tr("holidayTo")}${dateInput("end", h.end || h.date, "")}</label>
+    </div>
     <label>${tr("holidayNameAr")}<input name="ar" value="${esc(h.ar || "")}" required></label>
     <label>${tr("holidayNameEn")}<input name="en" value="${esc(h.en || "")}" required></label>
   `, (fd, modal) => {
-    const date = parseDmy(fd.get("date"));
-    if (!date) {
+    let date = parseDmy(fd.get("date"));
+    let end = parseDmy(fd.get("end"));
+    if (date === null || end === null) {
       modal.querySelector(".error").textContent = tr("dateInvalid");
       return false;
+    }
+    if (!date) {
+      modal.querySelector(".error").textContent = tr("required");
+      return false;
+    }
+    if (!end) end = date;
+    if (parseDay(end) < parseDay(date)) {
+      const swap = date;
+      date = end;
+      end = swap;
     }
     const ar = String(fd.get("ar") || "").trim();
     const en = String(fd.get("en") || "").trim();
@@ -3328,11 +3432,12 @@ function openHolidayForm(holiday) {
     }
     if (holiday) {
       holiday.date = date;
+      holiday.end = end;
       holiday.ar = ar;
       holiday.en = en;
     } else {
       state.data.holidays = state.data.holidays || [];
-      state.data.holidays.push({ id: uid(), date, ar, en });
+      state.data.holidays.push({ id: uid(), date, end, ar, en });
     }
     rescheduleFromCalendar();
     return save(state.data, true);
