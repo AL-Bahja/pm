@@ -258,18 +258,20 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   position: absolute; top: 0; bottom: 0; width: 1px; background: #8aa0ad; z-index: 1; pointer-events: none;
 }
 .bar {
-  position: absolute; height: 7px; border-radius: 3px; min-width: 4px; z-index: 2;
+  position: absolute; height: 8px; border-radius: 3px; min-width: 4px; z-index: 2;
   overflow: hidden;
 }
 .bar.baseline { background: #cbd5e1; top: 3px; height: 4px; z-index: 1; }
-.bar.planned { background: var(--planned); top: 10px; height: 8px; }
-.bar.actual { background: var(--actual); top: 12px; height: 5px; z-index: 3; }
+.bar.planned,
+.bar.actual { top: 11px; height: 8px; }
+.bar.planned { background: var(--planned); }
+.bar.actual { background: var(--actual); z-index: 3; }
 .bar.critical { background: #b42318; }
 .bar.summary { height: 6px; border-radius: 1px; }
 .bar-fill { display: block; height: 100%; background: rgba(255,255,255,0.4); }
 .ms-mark {
   position: absolute; width: 10px; height: 10px; transform: rotate(45deg);
-  top: 10px; z-index: 4; background: #64748b;
+  top: 11px; z-index: 4; background: #64748b;
 }
 .ms-mark.critical { background: #b42318; }
 .ms-mark.act { background: var(--actual); top: 12px; width: 8px; height: 8px; }
@@ -343,9 +345,11 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   .gantt-sticky-name { grid-template-columns: var(--name-w); }
   .gantt-dates-p, .gantt-dates-a { display: none; }
   .gantt-day { font-size: 8px; }
-  .bar { height: 8px; }
-  .bar.planned { top: 4px; }
-  .bar.actual { top: 16px; }
+  .bar.baseline { top: 4px; height: 4px; }
+  .bar.planned,
+  .bar.actual,
+  .ms-mark,
+  .ms-mark.act { top: 14px; }
   .modal-bg { padding: 0; align-items: end; }
   .modal {
     width: 100%;
