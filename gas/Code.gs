@@ -98,15 +98,9 @@ function emailReport_(body) {
       to: to.join(","),
       subject: String(body.subject || "Report"),
       html: String(body.html || ""),
-      title: String(body.title || ""),
-      dir: body.dir || "rtl",
-      infoTitle: body.infoTitle || "",
-      kpiTitle: body.kpiTitle || "",
-      taskTitle: body.taskTitle || "",
-      infoRows: body.infoRows || [],
-      kpiRows: body.kpiRows || [],
-      taskHead: body.taskHead || [],
-      taskRows: body.taskRows || []
+      pdfName: String(body.pdfName || ""),
+      pdfBase64: String(body.pdfBase64 || ""),
+      driveFileId: String(body.driveFileId || "")
     };
     try {
       sendMailJob_(job);
@@ -124,11 +118,17 @@ function sendMailJob_(job) {
   const subject = String(job.subject || "Report");
   const html = String(job.html || subject);
   const attachments = [];
-  const raw = String(job.pdfBase64 || "").replace(/^data:application\/pdf;base64,/i, "");
-  if (raw) {
-    attachments.push(Utilities.newBlob(Utilities.base64Decode(raw), MimeType.PDF, job.pdfName || subject.slice(0, 80) + ".pdf"));
-  } else if (html) {
-    attachments.push(Utilities.newBlob(html, MimeType.HTML, subject.slice(0, 80) + ".html"));
+  const pdfName = job.pdfName || subject.slice(0, 80) + ".pdf";
+  if (job.driveFileId) {
+    attachments.push(DriveApp.getFileById(job.driveFileId).getBlob().setName(pdfName));
+  } else {
+    const raw = String(job.pdfBase64 || "").replace(/^data:application\/pdf;base64,/i, "");
+    if (raw) {
+      attachments.push(Utilities.newBlob(Utilities.base64Decode(raw), MimeType.PDF, pdfName));
+    }
+  }
+  if (!attachments.length) {
+    throw new Error("pdf-missing");
   }
   MailApp.sendEmail({
     to: job.to,

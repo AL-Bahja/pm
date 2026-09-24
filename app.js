@@ -224,7 +224,9 @@ const I18N = {
     sendPdfNeedMailAuth: "التقرير لم يُرسل بعد. في سكربت جوجل اختر الدالة AUTHORIZE ثم Run واسمح بالبريد. بعد الموافقة Deploy → New version، ثم أعد الإرسال.",
     sendPdfNeedDeploy: "لم يُرسل التقرير. الصق gas/Code.gs في سكربت جوجل ثم Deploy إصدار جديد.",
     sendPdfNeedEmail: "لا يوجد بريد إلكتروني صالح.",
-    sendPdfWait: "جاري إرسال التقرير…",
+    sendPdfWait: "جاري تجهيز ملف PDF وإرساله…",
+    sendPdfConfirm: "هل تريد إرسال تقرير المشروع كملف PDF؟",
+    sendPdfNoPdf: "تعذر إنشاء ملف PDF. تحقق من الاتصال ثم أعد المحاولة.",
     holidays: "العطل الرسمية",
     addHoliday: "إضافة عطلة",
     holidayNameAr: "اسم العطلة بالعربي",
@@ -463,7 +465,9 @@ const I18N = {
     sendPdfNeedMailAuth: "The report is not sent yet. In the Google Script choose AUTHORIZE, click Run, and allow Gmail. Then Deploy → New version, and send again.",
     sendPdfNeedDeploy: "The report was not sent. Paste gas/Code.gs into the Google Script, then Deploy a new version.",
     sendPdfNeedEmail: "No valid email address.",
-    sendPdfWait: "Sending the report…",
+    sendPdfWait: "Preparing the PDF and sending…",
+    sendPdfConfirm: "Send this project report as a PDF?",
+    sendPdfNoPdf: "Could not create the PDF. Check the connection and try again.",
     holidays: "Official holidays",
     addHoliday: "Add holiday",
     holidayNameAr: "Holiday name in Arabic",
@@ -3111,28 +3115,48 @@ function loadHtml2Pdf() {
   });
 }
 
-function captureReportPdfBase64() {
-  const page = document.querySelector(".report-page");
-  if (!page || !window.html2pdf) return Promise.reject(new Error("pdf"));
-  document.body.classList.add("pdf-capture");
-  applyPrintOrient();
-  const orient = state.printOrient === "landscape" ? "landscape" : "portrait";
-  return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-    .then(() =>
-      window
-        .html2pdf()
-        .set({
-          margin: [6, 6, 6, 6],
-          image: { type: "jpeg", quality: 0.82 },
-          html2canvas: { scale: 1.35, useCORS: true, logging: false, windowWidth: 1400 },
-          jsPDF: { unit: "mm", format: "a4", orientation: orient },
-          pagebreak: { mode: ["css", "legacy"] }
-        })
-        .from(page)
-        .outputPdf("datauristring")
-    )
-    .then((uri) => String(uri || "").replace(/^data:application\/pdf;base64,/i, ""))
-    .finally(() => document.body.classList.remove("pdf-capture"));
+function buildReportCaptureEl(project) {
+  const wrap = document.createElement("div");
+  wrap.className = "pdf-report-root";
+  wrap.setAttribute("dir", state.lang === "ar" ? "rtl" : "ltr");
+  const gantt = state.reportShowGantt
+    ? `<section class="print-sheet pdf-gantt-sheet">
+        <h3>${esc(tr("gantt"))}</h3>
+        <div class="card gantt-wrap report-gantt">${ganttHtml(project, { compact: true, width: state.printOrient === "landscape" ? 980 : 670 })}</div>
+      </section>`
+    : "";
+  wrap.innerHTML = `${reportCoverHtml(project)}
+    <section class="print-sheet pdf-tasks-sheet">
+      <h3>${esc(tr("reportTasksPage"))}</h3>
+      <div class="card table-scroll report-table-wrap" style="padding:8px 16px">
+        ${reportTasksOnlyTable(project, state.reportShowSubs)}
+      </div>
+    </section>
+    ${gantt}`;
+  document.body.appendChild(wrap);
+  return wrap;
+}
+
+function captureReportPdfBlob(project) {
+  return loadHtml2Pdf().then(() => {
+    const root = buildReportCaptureEl(project);
+    const orient = state.printOrient === "landscape" ? "landscape" : "portrait";
+    return new Promise((resolve) => setTimeout(resolve, 80))
+      .then(() =>
+        window
+          .html2pdf()
+          .set({
+            margin: [8, 8, 8, 8],
+            image: { type: "jpeg", quality: 0.84 },
+            html2canvas: { scale: 1.4, useCORS: true, logging: false, windowWidth: 1200, scrollY: 0 },
+            jsPDF: { unit: "mm", format: "a4", orientation: orient },
+            pagebreak: { mode: ["css", "legacy"] }
+          })
+          .from(root)
+          .outputPdf("blob")
+      )
+      .finally(() => root.remove());
+  });
 }
 
 function sendReportPdf(project, toValue) {
@@ -3144,20 +3168,35 @@ function sendReportPdf(project, toValue) {
     alert(tr("sendPdfNeedEmail"));
     return;
   }
+  const who = toValue === "all" ? tr("sendPdfAll") : emails.join(", ");
+  if (!confirm(`${tr("sendPdfConfirm")}\n${project.name}\n${who}`)) return;
   const payload = buildEmailReport(project);
   const pdfName = `${String(project.name || "report").replace(/[\\/:*?"<>|]/g, " ").slice(0, 80)}.pdf`;
   showToast(tr("sendPdfWait"));
-  loadHtml2Pdf()
-    .then(() => captureReportPdfBase64())
-    .catch(() => "")
-    .then((pdfBase64) => {
-      payload.pdfBase64 = pdfBase64 || "";
-      payload.pdfName = pdfName;
-      return Drive.callBridge(Object.assign({ action: "emailReport", to: emails.join(",") }, payload));
+  captureReportPdfBlob(project)
+    .then((blob) => {
+      if (!blob || !blob.size) throw new Error("pdf");
+      const file = new File([blob], pdfName, { type: "application/pdf" });
+      return Drive.uploadAttachment(file);
+    })
+    .then((uploaded) => {
+      if (!uploaded || !uploaded.driveFileId) throw new Error("pdf");
+      return Drive.callBridge({
+        action: "emailReport",
+        to: emails.join(","),
+        subject: payload.subject,
+        html: payload.html,
+        pdfName,
+        driveFileId: uploaded.driveFileId
+      });
     })
     .then(() => showToast(tr("sendPdfOk")))
     .catch((err) => {
       const msg = String((err && err.message) || err || "");
+      if (msg === "pdf" || msg === "pdf-lib" || msg === "pdf-missing") {
+        alert(tr("sendPdfNoPdf"));
+        return;
+      }
       if (msg === "mail-auth" || /MailApp|send_mail|sendEmail/i.test(msg)) {
         alert(tr("sendPdfNeedMailAuth"));
         return;

@@ -982,6 +982,25 @@ body.pdf-capture .report-gantt {
   overflow: visible !important;
 }
 body.pdf-capture .print-sheet { break-after: page; page-break-after: always; }
+.pdf-report-root {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 1100px;
+  max-width: 100%;
+  background: #fff;
+  z-index: 30;
+  padding: 12px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.pdf-report-root .print-only { display: block !important; }
+.pdf-report-root .gantt-wrap,
+.pdf-report-root .report-gantt {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
 .error { color: var(--danger); min-height: 1.2em; }
 .print-only { display: none !important; }
 .readonly-note { background: #fff7ed; border: 1px solid #fed7aa; padding: 10px 12px; border-radius: 10px; }
