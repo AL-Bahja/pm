@@ -175,7 +175,7 @@ const I18N = {
     googleHint: "من أي حاسبة: اربط جوجل درايف بحساب الشركة picassomega86@gmail.com (هذا التخزين المشترك). بعد ذلك يظهر دخول النظام: مدير المشاريع أو مستخدم آخر.",
     googleWrongAccount: "يفضّل استخدام حساب درايف الشركة:",
     driveFolder: "مجلد التطبيق",
-    ganttSwipe: "على الهاتف: اسحب الجدول للتواريخ. المعين = حدث هام، الأحمر = مسار حرج، الرمادي = خط الأساس."
+    ganttSwipe: "على الهاتف: اسحب للتواريخ. خطان لكل مهمة: الرمادي خط الأساس، والسفلي المتوقع مع الفعلي فوقه."
   },
   en: {
     app: "Al-Bahja Company Project Management",
@@ -353,7 +353,7 @@ const I18N = {
     googleHint: "On any PC, connect Google Drive with the company account picassomega86@gmail.com (shared storage). Then sign in as project manager or another user.",
     googleWrongAccount: "Prefer the company Drive account:",
     driveFolder: "App folder",
-    ganttSwipe: "On phone: swipe for dates. Diamond = key event, red = critical path, gray = baseline."
+    ganttSwipe: "On phone: swipe for dates. Two bars per task: gray = baseline, lower = planned with actual on top."
   }
 };
 
@@ -1635,7 +1635,7 @@ function ganttHtml(project) {
   const mobile = window.matchMedia("(max-width: 800px)").matches;
   const dayW = mobile ? 14 : 16;
   const lockW = mobile ? 110 : 484;
-  const rowH = mobile ? 28 : 22;
+  const rowH = mobile ? 28 : 24;
   const headH = 48;
   const scaleW = days.length * dayW;
   const years = groupDays(days, (d) => String(d.getFullYear()));

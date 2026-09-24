@@ -146,7 +146,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   --name-w: 220px;
   --date-w: 132px;
   --lock-w: calc(var(--name-w) + var(--date-w) + var(--date-w));
-  --row-h: 22px;
+  --row-h: 24px;
   --head-h: 48px;
   flex: 1;
   min-height: 0;
@@ -258,21 +258,21 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   position: absolute; top: 0; bottom: 0; width: 1px; background: #8aa0ad; z-index: 1; pointer-events: none;
 }
 .bar {
-  position: absolute; height: 6px; border-radius: 3px; min-width: 4px; z-index: 2;
+  position: absolute; height: 7px; border-radius: 3px; min-width: 4px; z-index: 2;
   overflow: hidden;
 }
-.bar.baseline { background: #cbd5e1; top: 2px; height: 4px; z-index: 1; }
-.bar.planned { background: var(--planned); top: 8px; }
-.bar.actual { background: var(--actual); top: 15px; }
+.bar.baseline { background: #cbd5e1; top: 3px; height: 4px; z-index: 1; }
+.bar.planned { background: var(--planned); top: 10px; height: 8px; }
+.bar.actual { background: var(--actual); top: 12px; height: 5px; z-index: 3; }
 .bar.critical { background: #b42318; }
-.bar.summary { height: 5px; border-radius: 1px; }
+.bar.summary { height: 6px; border-radius: 1px; }
 .bar-fill { display: block; height: 100%; background: rgba(255,255,255,0.4); }
 .ms-mark {
   position: absolute; width: 10px; height: 10px; transform: rotate(45deg);
-  top: 8px; z-index: 4; background: #64748b;
+  top: 10px; z-index: 4; background: #64748b;
 }
 .ms-mark.critical { background: #b42318; }
-.ms-mark.act { background: var(--actual); top: 15px; width: 8px; height: 8px; }
+.ms-mark.act { background: var(--actual); top: 12px; width: 8px; height: 8px; }
 .ms-tag { color: var(--teal); font-size: 12px; }
 .gantt-links {
   position: absolute; left: 0; top: 0; z-index: 3; pointer-events: none; overflow: visible;
