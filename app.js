@@ -2956,6 +2956,7 @@ function reportTasksOnlyTable(project, showSubs) {
       const mark = depth ? (last ? "└ " : "├ ") : "";
       return `<tr class="${depth ? "report-sub" : "report-main"}">
         <td class="${depth ? "task-indent" : ""}">${mark}${esc(task.name)}</td>
+        <td>${taskWorkDays(task) || "—"}</td>
         <td>${money(task.plannedCost)}</td>
         <td>${money(task.actualCost)}</td>
         ${varCell(varianceOf(task))}
@@ -2963,6 +2964,8 @@ function reportTasksOnlyTable(project, showSubs) {
         <td>${fmtDate(planEnd(task))}</td>
         <td>${fmtDate(task.actualStart)}</td>
         <td>${fmtDate(task.actualEnd)}</td>
+        <td>${fmtDate(task.baseStart)}</td>
+        <td>${fmtDate(task.baseEnd)}</td>
         <td>${tr(task.status)}</td>
         <td>${Number(task.percent || 0)}%</td>
       </tr>`;
@@ -2971,9 +2974,11 @@ function reportTasksOnlyTable(project, showSubs) {
   return `<table class="report-table">
     <thead><tr>
       <th>${tr("taskName")}</th>
+      <th>${tr("workDays")}</th>
       <th>${tr("plannedCost")}</th><th>${tr("actualCost")}</th><th>${tr("variance")}</th>
       <th>${tr("plannedStart")}</th><th>${tr("plannedEnd")}</th>
       <th>${tr("actualStart")}</th><th>${tr("actualEnd")}</th>
+      <th>${tr("baseStart")}</th><th>${tr("baseEnd")}</th>
       <th>${tr("status")}</th><th>${tr("percent")}</th>
     </tr></thead>
     <tbody>${rows}</tbody>
@@ -2997,31 +3002,52 @@ function reportEmailHtml(project) {
       const v = varianceOf(task);
       return `<tr>
         <td>${depth ? "— " : ""}${esc(task.name)}</td>
+        <td>${taskWorkDays(task) || "—"}</td>
         <td>${money(task.plannedCost)}</td>
         <td>${money(task.actualCost)}</td>
         <td>${varText(v)}</td>
-        <td>${fmtDate(planStart(task))} → ${fmtDate(planEnd(task))}</td>
+        <td>${fmtDate(planStart(task))}</td>
+        <td>${fmtDate(planEnd(task))}</td>
+        <td>${fmtDate(task.actualStart)}</td>
+        <td>${fmtDate(task.actualEnd)}</td>
+        <td>${fmtDate(task.baseStart)}</td>
+        <td>${fmtDate(task.baseEnd)}</td>
+        <td>${esc(tr(task.status))}</td>
         <td>${Number(task.percent || 0)}%</td>
       </tr>`;
     })
     .join("");
-  return `<div dir="${dir}" style="font-family:Arial,Tahoma,sans-serif;font-size:13px">
+  return `<div dir="${dir}" style="font-family:Arial,Tahoma,sans-serif;font-size:12px">
     <h2>${esc(project.name)}</h2>
-    <table border="1" cellpadding="6" cellspacing="0" width="100%">
+    <table border="1" cellpadding="5" cellspacing="0" width="100%">
       <tr><td>${esc(tr("hospital"))}</td><td>${esc(project.hospital || "")}</td></tr>
       <tr><td>${esc(tr("location"))}</td><td>${esc(project.location || "")}</td></tr>
       <tr><td>${esc(tr("device"))}</td><td>${esc(deviceLabel(project.device))}</td></tr>
       ${extra}
     </table>
-    <p><b>${esc(tr("progress"))}:</b> ${s.progress}% · <b>${esc(tr("variance"))}:</b> ${varText(s.variance)} ${esc(tr("currency"))}</p>
+    <p>
+      <b>${esc(tr("progress"))}:</b> ${s.progress}% ·
+      <b>${esc(tr("plannedCost"))}:</b> ${money(s.plannedCost)} ·
+      <b>${esc(tr("actualCost"))}:</b> ${money(s.actualCost)} ·
+      <b>${esc(tr("variance"))}:</b> ${varText(s.variance)} ${esc(tr("currency"))} ·
+      <b>${esc(tr("remainingDays"))}:</b> ${s.remainingDays} ${esc(tr("days"))}
+    </p>
+    <p>${esc(tr("gantt"))}: ${state.reportShowGantt ? esc(tr("showGantt")) : "—"}</p>
     <h3>${esc(tr("reportTasksPage"))}</h3>
-    <table border="1" cellpadding="6" cellspacing="0" width="100%">
+    <table border="1" cellpadding="4" cellspacing="0" width="100%">
       <tr>
         <th>${esc(tr("taskName"))}</th>
+        <th>${esc(tr("workDays"))}</th>
         <th>${esc(tr("plannedCost"))}</th>
         <th>${esc(tr("actualCost"))}</th>
         <th>${esc(tr("variance"))}</th>
-        <th>${esc(tr("planned"))}</th>
+        <th>${esc(tr("plannedStart"))}</th>
+        <th>${esc(tr("plannedEnd"))}</th>
+        <th>${esc(tr("actualStart"))}</th>
+        <th>${esc(tr("actualEnd"))}</th>
+        <th>${esc(tr("baseStart"))}</th>
+        <th>${esc(tr("baseEnd"))}</th>
+        <th>${esc(tr("status"))}</th>
         <th>${esc(tr("percent"))}</th>
       </tr>
       ${taskRows}
@@ -3074,6 +3100,41 @@ function buildEmailReport(project) {
   };
 }
 
+function loadHtml2Pdf() {
+  if (window.html2pdf) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("pdf-lib"));
+    document.head.appendChild(s);
+  });
+}
+
+function captureReportPdfBase64() {
+  const page = document.querySelector(".report-page");
+  if (!page || !window.html2pdf) return Promise.reject(new Error("pdf"));
+  document.body.classList.add("pdf-capture");
+  applyPrintOrient();
+  const orient = state.printOrient === "landscape" ? "landscape" : "portrait";
+  return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    .then(() =>
+      window
+        .html2pdf()
+        .set({
+          margin: [6, 6, 6, 6],
+          image: { type: "jpeg", quality: 0.82 },
+          html2canvas: { scale: 1.35, useCORS: true, logging: false, windowWidth: 1400 },
+          jsPDF: { unit: "mm", format: "a4", orientation: orient },
+          pagebreak: { mode: ["css", "legacy"] }
+        })
+        .from(page)
+        .outputPdf("datauristring")
+    )
+    .then((uri) => String(uri || "").replace(/^data:application\/pdf;base64,/i, ""))
+    .finally(() => document.body.classList.remove("pdf-capture"));
+}
+
 function sendReportPdf(project, toValue) {
   let emails = [];
   if (toValue === "all") emails = usersWithEmail().map((u) => String(u.email || "").trim());
@@ -3084,8 +3145,16 @@ function sendReportPdf(project, toValue) {
     return;
   }
   const payload = buildEmailReport(project);
+  const pdfName = `${String(project.name || "report").replace(/[\\/:*?"<>|]/g, " ").slice(0, 80)}.pdf`;
   showToast(tr("sendPdfWait"));
-  Drive.callBridge(Object.assign({ action: "emailReport", to: emails.join(",") }, payload))
+  loadHtml2Pdf()
+    .then(() => captureReportPdfBase64())
+    .catch(() => "")
+    .then((pdfBase64) => {
+      payload.pdfBase64 = pdfBase64 || "";
+      payload.pdfName = pdfName;
+      return Drive.callBridge(Object.assign({ action: "emailReport", to: emails.join(",") }, payload));
+    })
     .then(() => showToast(tr("sendPdfOk")))
     .catch((err) => {
       const msg = String((err && err.message) || err || "");

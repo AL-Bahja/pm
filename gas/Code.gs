@@ -123,12 +123,19 @@ function emailReport_(body) {
 function sendMailJob_(job) {
   const subject = String(job.subject || "Report");
   const html = String(job.html || subject);
+  const attachments = [];
+  const raw = String(job.pdfBase64 || "").replace(/^data:application\/pdf;base64,/i, "");
+  if (raw) {
+    attachments.push(Utilities.newBlob(Utilities.base64Decode(raw), MimeType.PDF, job.pdfName || subject.slice(0, 80) + ".pdf"));
+  } else if (html) {
+    attachments.push(Utilities.newBlob(html, MimeType.HTML, subject.slice(0, 80) + ".html"));
+  }
   MailApp.sendEmail({
     to: job.to,
     subject: subject,
     htmlBody: html,
     name: "Al-Bahja PM",
-    attachments: [Utilities.newBlob(html, MimeType.HTML, subject.slice(0, 80) + ".html")]
+    attachments: attachments
   });
 }
 

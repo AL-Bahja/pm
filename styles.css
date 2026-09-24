@@ -967,6 +967,21 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 }
 .save-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .save-toast.error { background: var(--danger); }
+body.pdf-capture .app-side,
+body.pdf-capture .no-print,
+body.pdf-capture .save-toast { display: none !important; }
+body.pdf-capture .print-only { display: block !important; }
+body.pdf-capture .app-frame { display: block; height: auto; overflow: visible; }
+body.pdf-capture .app-content { overflow: visible !important; height: auto; }
+body.pdf-capture .page,
+body.pdf-capture .report-page { max-width: none; overflow: visible !important; }
+body.pdf-capture .gantt-wrap,
+body.pdf-capture .report-gantt {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+body.pdf-capture .print-sheet { break-after: page; page-break-after: always; }
 .error { color: var(--danger); min-height: 1.2em; }
 .print-only { display: none !important; }
 .readonly-note { background: #fff7ed; border: 1px solid #fed7aa; padding: 10px 12px; border-radius: 10px; }
