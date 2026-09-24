@@ -991,7 +991,28 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   .table-scroll { overflow: visible !important; }
   .print-sheet { break-after: page; page-break-after: always; }
   .print-sheet:last-child { break-after: auto; page-break-after: auto; }
-  .report-cover { break-after: page; page-break-after: always; }
+  .report-cover {
+    break-after: page;
+    page-break-after: always;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .report-cover .report-title { font-size: 16px; margin: 0 0 4px; }
+  .report-cover h3 { font-size: 12px; margin: 6px 0 4px; }
+  .report-cover .info-table th,
+  .report-cover .info-table td { padding: 3px 6px; font-size: 10px; }
+  .report-cover .progress-board { gap: 8px; margin: 6px 0 0; }
+  .report-cover .progress-hero { padding: 8px 10px; gap: 12px; }
+  .report-cover .progress-meter { width: 64px; height: 64px; }
+  .report-cover .progress-meter span { width: 46px; height: 46px; font-size: 14px; }
+  .report-cover .progress-hero-copy h3 { font-size: 12px; margin: 0 0 6px; }
+  .report-cover .progress-hero-copy .progress-track { height: 8px; margin: 0; }
+  .report-cover .progress-groups { grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .report-cover .progress-group { padding: 6px 8px; }
+  .report-cover .progress-group h4 { margin: 0 0 6px; font-size: 11px; }
+  .report-cover .progress-row { padding-bottom: 4px; gap: 4px 8px; }
+  .report-cover .progress-row b { font-size: 12px; }
+  .report-cover .progress-row .kpi-done { font-size: 10px; }
   .print-only { display: block !important; }
   .report-tasks-page { break-after: page; page-break-after: always; }
   .report-gantt-page { break-before: page; page-break-before: always; break-after: auto; }

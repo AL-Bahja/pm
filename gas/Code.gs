@@ -14,6 +14,7 @@ function doPost(e) {
   try {
     const body = JSON.parse((e && e.postData && e.postData.contents) || "{}");
     if (body.secret !== SECRET) return json_({ ok: false, error: "secret" });
+    if (body.action === "emailReport") return emailReport_(body);
     const store = ensureStore_();
     if (body.action === "load") return json_({ ok: true, data: loadData_(store) });
     if (body.action === "save") {
@@ -25,7 +26,6 @@ function doPost(e) {
       delete_(body.id);
       return json_({ ok: true });
     }
-    if (body.action === "emailReport") return emailReport_(body);
     return json_({ ok: false, error: "action" });
   } catch (err) {
     return json_({ ok: false, error: String(err && err.message ? err.message : err) });
@@ -103,22 +103,32 @@ function addTable_(body, rows, rtl) {
 }
 
 function emailReport_(body) {
-  const to = String(body.to || "")
-    .split(/[,;]+/)
-    .map(function (s) { return s.trim(); })
-    .filter(function (s) { return s.indexOf("@") > 0; });
-  if (!to.length) return json_({ ok: false, error: "to" });
-  const subject = String(body.subject || "Report");
-  const html = String(body.html || "");
-  const pdf = reportPdf_(body, subject);
-  MailApp.sendEmail({
-    to: to.join(","),
-    subject: subject,
-    htmlBody: html || subject,
-    name: "Al-Bahja PM",
-    attachments: pdf ? [pdf] : []
-  });
-  return json_({ ok: true });
+  try {
+    const to = String(body.to || "")
+      .split(/[,;]+/)
+      .map(function (s) { return s.trim(); })
+      .filter(function (s) { return s.indexOf("@") > 0; });
+    if (!to.length) return json_({ ok: false, error: "to" });
+    const subject = String(body.subject || "Report");
+    const html = String(body.html || "");
+    const attachments = [];
+    try {
+      const pdf = reportPdf_(body, subject);
+      if (pdf) attachments.push(pdf);
+    } catch (pdfErr) {
+      attachments.push(Utilities.newBlob(html || subject, MimeType.HTML, subject.slice(0, 80) + ".html"));
+    }
+    MailApp.sendEmail({
+      to: to.join(","),
+      subject: subject,
+      htmlBody: html || subject,
+      name: "Al-Bahja PM",
+      attachments: attachments
+    });
+    return json_({ ok: true });
+  } catch (err) {
+    return json_({ ok: false, error: String(err && err.message ? err.message : err) });
+  }
 }
 
 function reportPdf_(body, title) {

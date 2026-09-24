@@ -219,7 +219,9 @@ const I18N = {
     sendPdfTo: "إرسال إلى",
     sendPdfAll: "كل المستخدمين",
     sendPdfOk: "تم إرسال التقرير كملف PDF.",
-    sendPdfFail: "تعذر الإرسال. انشر سكربت جوجل المحدَّث ثم أعد المحاولة.",
+    sendPdfFail: "تعذر إرسال التقرير.",
+    remainingDays: "الأيام المتبقية",
+    sendPdfNeedDeploy: "لم يُرسل التقرير. افتح سكربت جوجل (Bahja-PM) والصق ملف gas/Code.gs ثم Deploy → Manage deployments → Edit → New version، واسمح بصلاحية Gmail.",
     sendPdfNeedEmail: "لا يوجد بريد إلكتروني صالح.",
     sendPdfWait: "جاري إرسال التقرير…",
     holidays: "العطل الرسمية",
@@ -455,7 +457,9 @@ const I18N = {
     sendPdfTo: "Send to",
     sendPdfAll: "All users",
     sendPdfOk: "The report PDF was sent.",
-    sendPdfFail: "Could not send. Deploy the updated Google Script, then try again.",
+    sendPdfFail: "Could not send the report.",
+    remainingDays: "Remaining days",
+    sendPdfNeedDeploy: "The report was not sent. Open the Bahja-PM Google Script, paste gas/Code.gs, then Deploy → Manage deployments → Edit → New version, and allow Gmail access.",
     sendPdfNeedEmail: "No valid email address.",
     sendPdfWait: "Sending the report…",
     holidays: "Official holidays",
@@ -1030,14 +1034,22 @@ function projectStats(project) {
     return v == null ? sum : sum + v;
   }, 0);
   const varianceReady = leaves.some(taskHasStarted);
+  const end = maxDate(tops.map((t) => planEnd(t)));
+  const today = iso(new Date());
+  let remainingDays = 0;
+  if (progress < 100 && end && parseDay(end) && parseDay(today) && parseDay(end) >= parseDay(today)) {
+    remainingDays = workDaysBetween(today, end);
+  }
   return {
     plannedCost,
     actualCost,
     variance: varianceReady ? variance : null,
     plannedDays,
     actualDays,
+    remainingDays,
     progress,
     count: leaves.length,
+    doneCount: done,
     mainCount: tops.length,
     mainDone: tops.filter(isTaskComplete).length,
     subCount: subs.length,
@@ -1053,16 +1065,15 @@ function progressKpisHtml(s) {
       <div class="progress-hero-copy">
         <h3>${tr("overallProgress")}</h3>
         <div class="progress-track" title="${s.progress}%"><span class="progress-fill" style="width:${s.progress}%"></span></div>
-        <p class="muted">${tr("doneCount")}: ${s.mainDone + s.subDone} / ${s.mainCount + s.subCount}</p>
       </div>
     </div>
     <div class="progress-groups">
       <div class="card progress-group">
         <h4>${tr("progressWork")}</h4>
         <div class="progress-rows">
-          <div class="progress-row"><span class="muted">${tr("mainTasks")}</span><b>${s.mainCount}</b><span class="kpi-done">${tr("doneCount")}: ${s.mainDone}</span></div>
-          <div class="progress-row"><span class="muted">${tr("subTasks")}</span><b>${s.subCount}</b><span class="kpi-done">${tr("doneCount")}: ${s.subDone}</span></div>
-          <div class="progress-row"><span class="muted">${tr("taskCount")}</span><b>${s.count}</b></div>
+          <div class="progress-row"><span class="muted">${tr("mainTasks")}</span><b>${s.mainCount}</b></div>
+          <div class="progress-row"><span class="muted">${tr("subTasks")}</span><b>${s.subCount}</b></div>
+          <div class="progress-row"><span class="muted">${tr("taskCount")}</span><b>${s.count}</b><span class="kpi-done">${tr("doneCount")}: ${s.doneCount}</span></div>
         </div>
       </div>
       <div class="card progress-group">
@@ -1078,6 +1089,7 @@ function progressKpisHtml(s) {
         <div class="progress-rows">
           <div class="progress-row"><span class="muted">${tr("plannedDays")}</span><b>${s.plannedDays} ${tr("days")}</b></div>
           <div class="progress-row"><span class="muted">${tr("actualDays")}</span><b>${s.actualDays} ${tr("days")}</b></div>
+          <div class="progress-row"><span class="muted">${tr("remainingDays")}</span><b>${s.remainingDays} ${tr("days")}</b></div>
         </div>
       </div>
     </div>
@@ -2872,7 +2884,6 @@ function reportCoverHtml(project) {
       <tr><th>${tr("device")}</th><td>${esc(deviceLabel(project.device))}</td></tr>
       ${extra}
     </table>
-    <h3>${tr("overallProgress")}</h3>
     ${progressKpisHtml(s)}
   </section>`;
 }
@@ -3074,7 +3085,10 @@ function sendReportPdf(project, toValue) {
   showToast(tr("sendPdfWait"));
   Drive.callBridge(Object.assign({ action: "emailReport", to: emails.join(",") }, payload))
     .then(() => showToast(tr("sendPdfOk")))
-    .catch(() => alert(tr("sendPdfFail")));
+    .catch((err) => {
+      const msg = String((err && err.message) || err || "");
+      alert(msg === "action" || msg === "bridge" ? tr("sendPdfNeedDeploy") : tr("sendPdfFail") + (msg ? "\n" + msg : ""));
+    });
 }
 
 function printReport() {
