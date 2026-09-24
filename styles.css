@@ -416,7 +416,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   flex: 0 0 var(--lock-w);
   width: var(--lock-w);
   display: grid;
-  grid-template-columns: var(--name-w) var(--date-w) var(--date-w);
+  grid-template-columns: var(--name-w) var(--plan-w, 0px) var(--act-w, 0px);
   background: #fff;
   box-shadow: 4px 0 8px rgba(18, 32, 43, 0.06);
 }
@@ -426,7 +426,8 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   height: var(--head-h);
 }
 .gantt-row { height: var(--row-h); border-bottom: 1px solid #edf2f5; }
-.gantt-row-lines .gantt-row { border-bottom: 1px solid #d3dce3; }
+.gantt-row-lines .gantt-row { border-bottom: 1px solid #c5d0d8; }
+.gantt-row-lines .gantt-row .gantt-sticky-name::after,
 .gantt-row-lines .gantt-track::after {
   content: "";
   position: absolute;
@@ -434,8 +435,8 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   right: 0;
   top: 50%;
   height: 1px;
-  background: rgba(18, 32, 43, 0.1);
-  z-index: 1;
+  background: rgba(18, 32, 43, 0.14);
+  z-index: 2;
   pointer-events: none;
 }
 .gantt-name, .gantt-col {
@@ -721,7 +722,15 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   min-width: 20px; height: 20px; padding: 0 6px;
   border-radius: 999px; background: #e8eef2; font-size: 11px; font-weight: 700;
 }
-.legend { display: flex; gap: 16px; font-size: 13px; margin: 8px 0 16px; }
+.legend { display: flex; gap: 16px; font-size: 13px; margin: 8px 0 8px; }
+.gantt-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0 0 12px;
+  align-items: center;
+}
+.gantt-opts .chk { font-weight: 600; font-size: 13px; }
 .swatch { display: inline-block; width: 14px; height: 10px; border-radius: 4px; margin-inline-end: 6px; vertical-align: middle; }
 .swatch.planned { background: var(--planned); }
 .swatch.actual { background: var(--actual); }
