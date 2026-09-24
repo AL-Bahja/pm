@@ -404,6 +404,20 @@ function parseDay(d) {
   return dt;
 }
 
+function planStart(task) {
+  return (task && (task.plannedStart || task.baseStart)) || "";
+}
+
+function planEnd(task) {
+  return (task && (task.plannedEnd || task.baseEnd || planStart(task))) || "";
+}
+
+function fillEmptyPlanFromBaseline(task) {
+  (task.children || []).forEach(fillEmptyPlanFromBaseline);
+  if (!task.plannedStart) task.plannedStart = task.baseStart || "";
+  if (!task.plannedEnd) task.plannedEnd = task.baseEnd || task.plannedStart || "";
+}
+
 function fmtDate(d) {
   const dt = parseDay(d);
   if (!dt) return "—";
@@ -439,6 +453,7 @@ function rollupTask(task) {
 }
 
 function rollupProject(project) {
+  (project.tasks || []).forEach(fillEmptyPlanFromBaseline);
   (project.tasks || []).forEach(rollupTask);
   return project;
 }
@@ -469,8 +484,10 @@ function addDaysIso(value, n) {
 
 function taskSpanDays(task) {
   if (task.milestone) return 0;
-  if (!task.plannedStart || !task.plannedEnd) return 0;
-  return daysBetween(task.plannedStart, task.plannedEnd);
+  const start = planStart(task);
+  const end = planEnd(task);
+  if (!start || !end) return 0;
+  return daysBetween(start, end);
 }
 
 function migrateTask(task) {
@@ -481,8 +498,9 @@ function migrateTask(task) {
   if (task.percent == null) {
     task.percent = task.status === "done" ? 100 : task.status === "in_progress" ? 50 : 0;
   }
-  if (task.milestone && task.plannedStart && !task.plannedEnd) task.plannedEnd = task.plannedStart;
   task.children.forEach(migrateTask);
+  if (!task.plannedStart) task.plannedStart = task.baseStart || "";
+  if (!task.plannedEnd) task.plannedEnd = task.baseEnd || task.plannedStart || "";
 }
 
 function predText(task, project) {
@@ -500,6 +518,7 @@ function predText(task, project) {
 }
 
 function applyDependencies(project) {
+  (project.tasks || []).forEach(fillEmptyPlanFromBaseline);
   const list = flattenTasks(project);
   const byId = Object.fromEntries(list.map((t) => [t.id, t]));
   for (let n = 0; n < 30; n++) {
@@ -638,8 +657,8 @@ function projectStats(project) {
   const plannedCost = tops.reduce((s, t) => s + Number(t.plannedCost || 0), 0);
   const actualCost = tops.reduce((s, t) => s + Number(t.actualCost || 0), 0);
   const plannedDays = daysBetween(
-    minDate(tops.map((t) => t.plannedStart)),
-    maxDate(tops.map((t) => t.plannedEnd))
+    minDate(tops.map((t) => planStart(t))),
+    maxDate(tops.map((t) => planEnd(t)))
   );
   const actualDays = daysBetween(
     minDate(tops.map((t) => t.actualStart)),
@@ -1412,7 +1431,7 @@ function taskRow(project, taskItem, parent, index, label, isSub, expanded, isLas
     <td data-label="${esc(tr("predecessors"))}">${esc(predText(taskItem, project))}</td>
     <td data-label="${esc(tr("status"))}"><span class="badge ${taskItem.status}">${tr(taskItem.status)}</span></td>
     <td data-label="${esc(tr("percent"))}">${Number(taskItem.percent || 0)}%</td>
-    <td data-label="${esc(tr("planned"))}">${fmtDate(taskItem.plannedStart)} → ${fmtDate(taskItem.plannedEnd)}</td>
+    <td data-label="${esc(tr("planned"))}">${fmtDate(planStart(taskItem))} → ${fmtDate(planEnd(taskItem))}</td>
     <td data-label="${esc(tr("actual"))}">${fmtDate(taskItem.actualStart)} → ${fmtDate(taskItem.actualEnd)}</td>
     <td data-label="${esc(tr("slack"))}">${taskItem.slack === "" || taskItem.slack == null ? "—" : taskItem.slack}</td>
     <td data-label="${esc(tr("plannedCost"))}">${money(taskItem.plannedCost)}</td>
@@ -1687,12 +1706,12 @@ function ganttHtml(project) {
       const msIcon = task.milestone ? `<span class="ms-tag">◆</span>` : "";
       const planCls = `planned${task.critical ? " critical" : ""}${kids ? " summary" : ""}`;
       const planBar = task.milestone
-        ? diamondHtml(task.plannedStart || task.plannedEnd, `plan${task.critical ? " critical" : ""}`)
-        : barHtml(task.plannedStart, task.plannedEnd, planCls, Number(task.percent || 0));
+        ? diamondHtml(planStart(task) || planEnd(task), `plan${task.critical ? " critical" : ""}`)
+        : barHtml(planStart(task), planEnd(task), planCls, Number(task.percent || 0));
       return `<div class="gantt-row ${depth ? "sub" : ""} ${task.critical ? "is-critical" : ""}">
         <div class="gantt-sticky-name">
           <div class="gantt-name">${twist}<span class="gantt-name-text">${esc(task.name)}</span>${msIcon}${count}</div>
-          <div class="gantt-col gantt-dates-p">${dateRange(task.plannedStart, task.plannedEnd)}</div>
+          <div class="gantt-col gantt-dates-p">${dateRange(planStart(task), planEnd(task))}</div>
           <div class="gantt-col gantt-dates-a">${dateRange(task.actualStart, task.actualEnd)}</div>
         </div>
         <div class="gantt-track" style="width:${scaleW}px">
@@ -1716,8 +1735,8 @@ function ganttHtml(project) {
       if (pi == null) return;
       const pred = vis[pi].task;
       const type = p.type || "FS";
-      const x1 = xOf(type === "SS" || type === "SF" ? pred.plannedStart : pred.plannedEnd || pred.plannedStart, type === "SS" || type === "SF" ? "start" : "end");
-      const x2 = xOf(type === "FF" || type === "SF" ? row.task.plannedEnd || row.task.plannedStart : row.task.plannedStart, type === "FF" || type === "SF" ? "end" : "start");
+      const x1 = xOf(type === "SS" || type === "SF" ? planStart(pred) : planEnd(pred) || planStart(pred), type === "SS" || type === "SF" ? "start" : "end");
+      const x2 = xOf(type === "FF" || type === "SF" ? planEnd(row.task) || planStart(row.task) : planStart(row.task), type === "FF" || type === "SF" ? "end" : "start");
       if (x1 == null || x2 == null) return;
       const y1 = headH + pi * rowH + rowH / 2;
       const y2 = headH + si * rowH + rowH / 2;
@@ -1951,8 +1970,8 @@ function openTaskForm(project, taskItem, parent) {
     <label>${tr("taskName")}<input name="name" value="${esc(tk.name)}" required></label>
     <label class="chk"><input type="checkbox" name="milestone" ${tk.milestone ? "checked" : ""}> ${tr("milestone")}</label>
     <div class="grid-2">
-      <label>${tr("plannedStart")}${dateInput("plannedStart", tk.plannedStart, "")}</label>
-      <label>${tr("plannedEnd")}${dateInput("plannedEnd", tk.plannedEnd, "")}</label>
+      <label>${tr("plannedStart")}${dateInput("plannedStart", tk.plannedStart || tk.baseStart, "")}</label>
+      <label>${tr("plannedEnd")}${dateInput("plannedEnd", tk.plannedEnd || tk.baseEnd, "")}</label>
       <label>${tr("baseStart")}${dateInput("baseStart", tk.baseStart, "")}</label>
       <label>${tr("baseEnd")}${dateInput("baseEnd", tk.baseEnd, "")}</label>
       <label>${tr("actualStart")}${dateInput("actualStart", tk.actualStart, "")}</label>
@@ -1994,6 +2013,8 @@ function openTaskForm(project, taskItem, parent) {
       }
       payload[key] = parsed;
     }
+    if (!payload.plannedStart) payload.plannedStart = payload.baseStart || "";
+    if (!payload.plannedEnd) payload.plannedEnd = payload.baseEnd || payload.plannedStart || "";
     payload.status = fd.get("status");
     payload.percent = Math.max(0, Math.min(100, Number(fd.get("percent") || 0)));
     if (payload.milestone && payload.plannedStart) payload.plannedEnd = payload.plannedStart;
@@ -2090,8 +2111,8 @@ function reportTable(projects, withTasks, showSubs) {
         <td>${money(s.plannedCost)}</td>
         <td>${money(s.actualCost)}</td>
         <td>${money(s.actualCost - s.plannedCost)}</td>
-        <td>${fmtDate(minDate(p.tasks.map((x) => x.plannedStart)))}</td>
-        <td>${fmtDate(maxDate(p.tasks.map((x) => x.plannedEnd)))}</td>
+        <td>${fmtDate(minDate(p.tasks.map((x) => planStart(x))))}</td>
+        <td>${fmtDate(maxDate(p.tasks.map((x) => planEnd(x))))}</td>
         <td>${fmtDate(minDate(p.tasks.map((x) => x.actualStart)))}</td>
         <td>${fmtDate(maxDate(p.tasks.map((x) => x.actualEnd)))}</td>
         <td>${s.plannedDays}</td>
@@ -2111,11 +2132,11 @@ function reportTable(projects, withTasks, showSubs) {
           <td>${money(task.plannedCost)}</td>
           <td>${money(task.actualCost)}</td>
           <td>${money(Number(task.actualCost || 0) - Number(task.plannedCost || 0))}</td>
-          <td>${fmtDate(task.plannedStart)}</td>
-          <td>${fmtDate(task.plannedEnd)}</td>
+          <td>${fmtDate(planStart(task))}</td>
+          <td>${fmtDate(planEnd(task))}</td>
           <td>${fmtDate(task.actualStart)}</td>
           <td>${fmtDate(task.actualEnd)}</td>
-          <td>${daysBetween(task.plannedStart, task.plannedEnd)}</td>
+          <td>${daysBetween(planStart(task), planEnd(task))}</td>
           <td>${daysBetween(task.actualStart, task.actualEnd)}</td>
           <td>${tr(task.status)}</td>
         </tr>`;
