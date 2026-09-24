@@ -25,6 +25,7 @@ function doPost(e) {
       delete_(body.id);
       return json_({ ok: true });
     }
+    if (body.action === "emailReport") return emailReport_(body);
     return json_({ ok: false, error: "action" });
   } catch (err) {
     return json_({ ok: false, error: String(err && err.message ? err.message : err) });
@@ -74,4 +75,77 @@ function upload_(store, body) {
 function delete_(id) {
   if (!id) return;
   DriveApp.getFileById(id).setTrashed(true);
+}
+
+function asRows_(rows) {
+  return (rows || []).map(function (row) {
+    return (row || []).map(function (c) {
+      return String(c == null ? "" : c);
+    });
+  });
+}
+
+function addTable_(body, rows, rtl) {
+  const clean = asRows_(rows).filter(function (r) { return r.length; });
+  if (!clean.length) return;
+  const table = body.appendTable(clean);
+  table.setBorderWidth(0.5);
+  if (rtl) {
+    try {
+      for (var i = 0; i < table.getNumRows(); i++) {
+        var row = table.getRow(i);
+        for (var j = 0; j < row.getNumCells(); j++) {
+          row.getCell(j).getChild(0).asParagraph().setLeftToRight(false);
+        }
+      }
+    } catch (err) {}
+  }
+}
+
+function emailReport_(body) {
+  const to = String(body.to || "")
+    .split(/[,;]+/)
+    .map(function (s) { return s.trim(); })
+    .filter(function (s) { return s.indexOf("@") > 0; });
+  if (!to.length) return json_({ ok: false, error: "to" });
+  const subject = String(body.subject || "Report");
+  const html = String(body.html || "");
+  const pdf = reportPdf_(body, subject);
+  MailApp.sendEmail({
+    to: to.join(","),
+    subject: subject,
+    htmlBody: html || subject,
+    name: "Al-Bahja PM",
+    attachments: pdf ? [pdf] : []
+  });
+  return json_({ ok: true });
+}
+
+function reportPdf_(body, title) {
+  const name = String(title || "report").replace(/[\\/:*?"<>|]/g, " ").slice(0, 80);
+  const doc = DocumentApp.create(name);
+  const b = doc.getBody();
+  b.clear();
+  const rtl = body.dir === "rtl";
+  function heading(text, level) {
+    if (!text) return;
+    const p = b.appendParagraph(String(text));
+    p.setHeading(level || DocumentApp.ParagraphHeading.HEADING2);
+    if (rtl) p.setLeftToRight(false);
+  }
+  heading(body.title || name, DocumentApp.ParagraphHeading.HEADING1);
+  heading(body.infoTitle || "");
+  addTable_(b, body.infoRows, rtl);
+  heading(body.kpiTitle || "");
+  addTable_(b, body.kpiRows, rtl);
+  heading(body.taskTitle || "");
+  const taskRows = [];
+  if (body.taskHead) taskRows.push(body.taskHead);
+  (body.taskRows || []).forEach(function (r) { taskRows.push(r); });
+  addTable_(b, taskRows, rtl);
+  doc.saveAndClose();
+  const file = DriveApp.getFileById(doc.getId());
+  const pdf = file.getAs(MimeType.PDF).setName(name + ".pdf");
+  file.setTrashed(true);
+  return pdf;
 }

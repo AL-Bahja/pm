@@ -87,7 +87,7 @@ const I18N = {
     autoSchedule: "ضبط التواريخ تلقائياً حسب الاعتماديات",
     autoScheduleHint: "يبقى الخيار محفوظاً. عند كل حفظ تُحدَّث التواريخ المتوقعة لهذه المهمة من الاعتماديات.",
     workDays: "عدد الأيام",
-    workDaysHint: "الجمعة والسبت عطلة. العدد هو أيام العمل فقط، وتُحسب التواريخ مع تخطي العطل.",
+    workDaysHint: "الجمعة والسبت عطلة، إضافة إلى العطل الرسمية. العدد أيام عمل فقط، والتواريخ تتخطى العطل.",
     noPreds: "لا اعتماديات",
     not_started: "لم تبدأ",
     in_progress: "قيد التنفيذ",
@@ -161,6 +161,9 @@ const I18N = {
     addUser: "إضافة مستخدم",
     email: "البريد الإلكتروني",
     displayName: "الاسم الظاهر",
+    displayNameAr: "الاسم الظاهر بالعربي",
+    displayNameEn: "الاسم الظاهر بالإنجليزي",
+    helloHonorific: "مرحبا استاذ",
     newPassword: "كلمة مرور جديدة",
     userLoginHint: "الدخول يكون باسم المستخدم وكلمة المرور المحفوظة هنا (يمكن أيضاً الاسم الظاهر).",
     usernameTaken: "اسم المستخدم موجود مسبقاً.",
@@ -211,7 +214,21 @@ const I18N = {
     ganttRowLines: "خطوط أفقية لتحديد المهام",
     ganttShowWeekends: "أيام العطل",
     ganttShowPlan: "التواريخ المتوقعة",
-    ganttShowActual: "التواريخ الفعلية"
+    ganttShowActual: "التواريخ الفعلية",
+    sendPdf: "إرسال PDF",
+    sendPdfTo: "إرسال إلى",
+    sendPdfAll: "كل المستخدمين",
+    sendPdfOk: "تم إرسال التقرير كملف PDF.",
+    sendPdfFail: "تعذر الإرسال. انشر سكربت جوجل المحدَّث ثم أعد المحاولة.",
+    sendPdfNeedEmail: "لا يوجد بريد إلكتروني صالح.",
+    sendPdfWait: "جاري إرسال التقرير…",
+    holidays: "العطل الرسمية",
+    addHoliday: "إضافة عطلة",
+    holidayNameAr: "اسم العطلة بالعربي",
+    holidayNameEn: "اسم العطلة بالإنجليزي",
+    holidayDate: "تاريخ العطلة",
+    sectionDates: "التواريخ",
+    sectionCost: "الكلف"
   },
   en: {
     app: "Al-Bahja Company Project Management",
@@ -301,7 +318,7 @@ const I18N = {
     autoSchedule: "Shift dates automatically from dependencies",
     autoScheduleHint: "This stays saved. Each save updates this task’s planned dates from its predecessors.",
     workDays: "Duration (days)",
-    workDaysHint: "Friday and Saturday are non-working. Duration is working days only, and dates skip weekends.",
+    workDaysHint: "Friday, Saturday, and official holidays are non-working. Duration is working days only, and dates skip them.",
     noPreds: "No predecessors",
     not_started: "Not started",
     in_progress: "In progress",
@@ -375,6 +392,9 @@ const I18N = {
     addUser: "Add user",
     email: "Email",
     displayName: "Display name",
+    displayNameAr: "Display name in Arabic",
+    displayNameEn: "Display name in English",
+    helloHonorific: "Hello Mr.",
     newPassword: "New password",
     userLoginHint: "They sign in with this username and password (display name also works).",
     usernameTaken: "This username already exists.",
@@ -425,7 +445,21 @@ const I18N = {
     ganttRowLines: "Horizontal lines to track task rows",
     ganttShowWeekends: "Non-working days",
     ganttShowPlan: "Planned dates",
-    ganttShowActual: "Actual dates"
+    ganttShowActual: "Actual dates",
+    sendPdf: "Send PDF",
+    sendPdfTo: "Send to",
+    sendPdfAll: "All users",
+    sendPdfOk: "The report PDF was sent.",
+    sendPdfFail: "Could not send. Deploy the updated Google Script, then try again.",
+    sendPdfNeedEmail: "No valid email address.",
+    sendPdfWait: "Sending the report…",
+    holidays: "Official holidays",
+    addHoliday: "Add holiday",
+    holidayNameAr: "Holiday name in Arabic",
+    holidayNameEn: "Holiday name in English",
+    holidayDate: "Holiday date",
+    sectionDates: "Dates",
+    sectionCost: "Costs"
   }
 };
 
@@ -484,10 +518,64 @@ function isWeekend(d) {
   return w === 5 || w === 6;
 }
 
+function holidayIsoSet() {
+  const set = new Set();
+  (state.data.holidays || []).forEach((h) => {
+    const dt = parseDay(h.date);
+    if (dt) set.add(iso(dt));
+  });
+  return set;
+}
+
+function isHoliday(d) {
+  const dt = parseDay(d);
+  if (!dt) return false;
+  return holidayIsoSet().has(iso(dt));
+}
+
+function isNonWorking(d) {
+  return isWeekend(d) || isHoliday(d);
+}
+
+function holidayLabel(h) {
+  if (!h) return "";
+  return state.lang === "ar" ? (h.ar || h.en || "") : (h.en || h.ar || "");
+}
+
+function userDisplayName(u) {
+  if (!u) return "";
+  if (state.lang === "ar") return String(u.nameAr || u.name || u.nameEn || "").trim();
+  return String(u.nameEn || u.name || u.nameAr || "").trim();
+}
+
+function helloLine(u) {
+  const name = userDisplayName(u);
+  return name ? `${tr("helloHonorific")} ${name}` : tr("helloHonorific");
+}
+
+function syncUserNames(u) {
+  if (!u) return u;
+  u.nameAr = String(u.nameAr || "").trim();
+  u.nameEn = String(u.nameEn || "").trim();
+  if (!u.nameAr && u.name) u.nameAr = String(u.name).trim();
+  u.name = u.nameAr || u.nameEn || String(u.name || "").trim();
+  return u;
+}
+
+function costVariance(planned, actual) {
+  return Number(actual || 0) - Number(planned || 0);
+}
+
+function varCell(n, extra) {
+  const v = Number(n || 0);
+  const cls = v > 0 ? "var-over" : v < 0 ? "var-under" : "";
+  return `<td class="${cls}" ${extra || ""}>${money(v)}</td>`;
+}
+
 function nextWorkDay(value) {
   let dt = parseDay(value);
   if (!dt) return "";
-  while (isWeekend(dt)) dt.setDate(dt.getDate() + 1);
+  while (isNonWorking(dt)) dt.setDate(dt.getDate() + 1);
   return iso(dt);
 }
 
@@ -500,7 +588,7 @@ function addWorkDaysIso(value, n) {
   let left = Math.abs(n);
   while (left > 0) {
     dt.setDate(dt.getDate() + step);
-    if (!isWeekend(dt)) left--;
+    if (!isNonWorking(dt)) left--;
   }
   return iso(dt);
 }
@@ -512,7 +600,7 @@ function workDaysBetween(a, b) {
   let n = 0;
   const cur = new Date(da.getTime());
   while (cur <= db) {
-    if (!isWeekend(cur)) n++;
+    if (!isNonWorking(cur)) n++;
     cur.setDate(cur.getDate() + 1);
   }
   return n;
@@ -629,8 +717,8 @@ function rollupTask(task) {
   }
   task.plannedCost = task.children.reduce((s, c) => s + Number(c.plannedCost || 0), 0);
   task.actualCost = task.children.reduce((s, c) => s + Number(c.actualCost || 0), 0);
-  if (!task.plannedStart) task.plannedStart = minDate(task.children.map((c) => c.plannedStart));
-  if (!task.plannedEnd) task.plannedEnd = maxDate(task.children.map((c) => c.plannedEnd));
+  task.plannedStart = minDate(task.children.map((c) => planStart(c)));
+  task.plannedEnd = maxDate(task.children.map((c) => planEnd(c)));
   if (!task.actualStart) task.actualStart = minDate(task.children.map((c) => c.actualStart));
   if (!task.actualEnd) task.actualEnd = maxDate(task.children.map((c) => c.actualEnd));
   task.status = deriveStatus(task);
@@ -794,10 +882,14 @@ function computeCritical(project) {
 function setProjectBaseline(project) {
   let n = 0;
   flattenTasks(project).forEach((t) => {
+    if (!hasChildren(t) && !t.milestone && Number(t.workDays) > 0) applyWorkDuration(t);
+  });
+  rollupProject(project);
+  flattenTasks(project).forEach((t) => {
     const hasPlan = !!(t.plannedStart || t.plannedEnd);
     const hasBase = !!(t.baseStart || t.baseEnd);
     if (hasPlan) {
-      if (t.plannedStart) t.baseStart = t.plannedStart;
+      t.baseStart = t.plannedStart || t.plannedEnd || "";
       t.baseEnd = t.plannedEnd || t.plannedStart || t.baseEnd || "";
       n += 1;
     } else if (hasBase) {
@@ -807,6 +899,16 @@ function setProjectBaseline(project) {
     }
   });
   return n;
+}
+
+function rescheduleFromCalendar() {
+  (state.data.projects || []).forEach((p) => {
+    flattenTasks(p).forEach((t) => {
+      if (!hasChildren(t) && !t.milestone && Number(t.workDays) > 0) applyWorkDuration(t);
+    });
+    applyDependencies(p);
+    rollupProject(p);
+  });
 }
 
 function resetDatesKeepBaseline(project) {
@@ -888,6 +990,7 @@ function progressKpisHtml(s) {
       <div class="card kpi"><span class="muted">${tr("taskCount")}</span><b>${s.count}</b></div>
       <div class="card kpi"><span class="muted">${tr("plannedCost")}</span><b>${money(s.plannedCost)}</b></div>
       <div class="card kpi"><span class="muted">${tr("actualCost")}</span><b>${money(s.actualCost)}</b></div>
+      <div class="card kpi"><span class="muted">${tr("variance")}</span><b class="${costVariance(s.plannedCost, s.actualCost) > 0 ? "var-over" : costVariance(s.plannedCost, s.actualCost) < 0 ? "var-under" : ""}">${money(costVariance(s.plannedCost, s.actualCost))}</b></div>
       <div class="card kpi"><span class="muted">${tr("plannedDays")}</span><b>${s.plannedDays} ${tr("days")}</b></div>
       <div class="card kpi"><span class="muted">${tr("actualDays")}</span><b>${s.actualDays} ${tr("days")}</b></div>
     </div>`;
@@ -943,9 +1046,10 @@ function extraLabel(row) {
 function seed() {
   return {
     devices: defaultDevices(),
+    holidays: [],
     users: [
-      { id: "u1", username: "manager", password: "manager123", role: "pm", deviceScope: "all", roleTitle: "", name: "مدير المشاريع", email: "picassomega86@gmail.com" },
-      { id: "u2", username: "viewer", password: "viewer123", role: "other", deviceScope: "all", roleTitle: "مراقب ميداني", name: "مراقب ميداني", email: "" }
+      { id: "u1", username: "manager", password: "manager123", role: "pm", deviceScope: "all", roleTitle: "", name: "مدير المشاريع", nameAr: "مدير المشاريع", nameEn: "Project Manager", email: "picassomega86@gmail.com" },
+      { id: "u2", username: "viewer", password: "viewer123", role: "other", deviceScope: "all", roleTitle: "مراقب ميداني", name: "مراقب ميداني", nameAr: "مراقب ميداني", nameEn: "Field watcher", email: "" }
     ],
     projects: []
   };
@@ -953,6 +1057,7 @@ function seed() {
 
 function migrate(data) {
   if (!Array.isArray(data.devices) || !data.devices.length) data.devices = defaultDevices();
+  if (!Array.isArray(data.holidays)) data.holidays = [];
   (data.users || []).forEach((u) => {
     if (u.role === "viewer") {
       u.role = "other";
@@ -961,6 +1066,7 @@ function migrate(data) {
     if (u.role !== "pm") u.role = "other";
     if (u.roleTitle == null) u.roleTitle = "";
     if (!u.deviceScope) u.deviceScope = u.role === "pm" ? "all" : "all";
+    syncUserNames(u);
   });
   (data.projects || []).forEach((p) => {
     if (!p.docFiles) p.docFiles = Array.isArray(p.files) ? p.files : [];
@@ -1112,8 +1218,12 @@ function findLoginUser(username, password) {
   const passOk = (u) => String(u.password || "").trim() === pass;
   const byUser = users.find((u) => sameLoginName(u.username, name) && passOk(u));
   if (byUser) return byUser;
-  const byName = users.filter((u) => sameLoginName(u.name, name) && passOk(u));
-  return byName.length === 1 ? byName[0] : null;
+  const byName = users.filter((u) => {
+    const names = [u.username, u.name, u.nameAr, u.nameEn];
+    return names.some((n) => sameLoginName(n, name)) && passOk(u);
+  });
+  if (byName.length === 1) return byName[0];
+  return users.find((u) => sameLoginName(u.username, name) && passOk(u)) || null;
 }
 
 function renderDriveStatus() {}
@@ -1515,7 +1625,7 @@ function shellView(user) {
         <div class="logo"><img src="logo.jpg" alt="${esc(tr("app"))}"></div>
         <div>
           <strong>${tr("app")}</strong>
-          <div class="muted">${esc(user.name)}</div>
+          <div class="muted">${esc(helloLine(user))}</div>
         </div>
       </div>
       <nav class="app-nav">
@@ -1723,12 +1833,7 @@ function projectView() {
               <span><i class="swatch critical"></i>${tr("critical")}</span>
               <span><i class="swatch milestone"></i>${tr("milestone")}</span>
             </div>
-            <div class="gantt-opts">
-              <label class="chk"><input type="checkbox" data-gantt-opt="ganttRowLines" ${state.ganttRowLines ? "checked" : ""}> ${tr("ganttRowLines")}</label>
-              <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowWeekends" ${state.ganttShowWeekends ? "checked" : ""}> ${tr("ganttShowWeekends")}</label>
-              <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowPlan" ${state.ganttShowPlan ? "checked" : ""}> ${tr("ganttShowPlan")}</label>
-              <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowActual" ${state.ganttShowActual ? "checked" : ""}> ${tr("ganttShowActual")}</label>
-            </div>
+            ${ganttOptsHtml()}
           </div>
           <div class="card gantt-wrap">${ganttHtml(project)}</div>
         </section>` : tab === "files" ? `<section class="project-panel is-on" data-panel="files">
@@ -1755,7 +1860,7 @@ function projectView() {
                 <th>${tr("plannedStart")} / ${tr("plannedEnd")}</th>
                 <th>${tr("actualStart")} / ${tr("actualEnd")}</th>
                 <th>${tr("slack")}</th>
-                <th>${tr("plannedCost")}</th><th>${tr("actualCost")}</th>
+                <th>${tr("plannedCost")}</th><th>${tr("actualCost")}</th><th>${tr("variance")}</th>
                 ${isPm() ? "<th></th>" : ""}
               </tr></thead>
               <tbody data-tasks-body></tbody>
@@ -1772,14 +1877,7 @@ function projectView() {
     });
   }
   bindGanttScroll(box);
-  box.querySelectorAll("[data-gantt-opt]").forEach((el) => {
-    el.onchange = () => {
-      const key = el.getAttribute("data-gantt-opt");
-      state[key] = el.checked;
-      localStorage.setItem(KEY + "-" + key, el.checked ? "on" : "off");
-      render();
-    };
-  });
+  bindGanttOpts(box);
   box.querySelectorAll("[data-twist]").forEach((btn) => {
     btn.onclick = (e) => {
       e.preventDefault();
@@ -1857,6 +1955,7 @@ function taskRow(project, taskItem, parent, index, label, isSub, expanded, isLas
     <td data-label="${esc(tr("slack"))}">${taskItem.slack === "" || taskItem.slack == null ? "—" : taskItem.slack}</td>
     <td data-label="${esc(tr("plannedCost"))}">${money(taskItem.plannedCost)}</td>
     <td data-label="${esc(tr("actualCost"))}">${money(taskItem.actualCost)}</td>
+    ${varCell(costVariance(taskItem.plannedCost, taskItem.actualCost), `data-label="${esc(tr("variance"))}"`)}
     ${isPm() ? `<td class="row actions">
       <button class="btn small secondary" data-up>${tr("up")}</button>
       <button class="btn small secondary" data-down>${tr("down")}</button>
@@ -2107,16 +2206,36 @@ function ganttColIndex(cols, isoDate) {
   return best;
 }
 
+function ganttOptsHtml() {
+  return `<div class="gantt-opts">
+    <label class="chk"><input type="checkbox" data-gantt-opt="ganttRowLines" ${state.ganttRowLines ? "checked" : ""}> ${tr("ganttRowLines")}</label>
+    <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowWeekends" ${state.ganttShowWeekends ? "checked" : ""}> ${tr("ganttShowWeekends")}</label>
+    <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowPlan" ${state.ganttShowPlan ? "checked" : ""}> ${tr("ganttShowPlan")}</label>
+    <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowActual" ${state.ganttShowActual ? "checked" : ""}> ${tr("ganttShowActual")}</label>
+  </div>`;
+}
+
+function bindGanttOpts(box) {
+  box.querySelectorAll("[data-gantt-opt]").forEach((inp) => {
+    inp.onchange = () => {
+      const key = inp.getAttribute("data-gantt-opt");
+      state[key] = inp.checked;
+      localStorage.setItem(KEY + "-" + key, inp.checked ? "on" : "off");
+      render();
+    };
+  });
+}
+
 function ganttHtml(project, opts) {
   computeCritical(project);
   const compact = !!(opts && opts.compact);
   const mobile = window.matchMedia("(max-width: 800px)").matches;
   const targetW = Number(opts && opts.width) || (compact ? 670 : 980);
   const nameW = compact || mobile ? 110 : 220;
-  const showPlanCol = !compact && !mobile && !!state.ganttShowPlan;
-  const showActCol = !compact && !mobile && !!state.ganttShowActual;
+  const showPlanCol = !!state.ganttShowPlan && (!mobile || compact);
+  const showActCol = !!state.ganttShowActual && (!mobile || compact);
   const showWeekends = state.ganttShowWeekends !== false;
-  const dateW = 132;
+  const dateW = compact ? 88 : 132;
   const planW = showPlanCol ? dateW : 0;
   const actW = showActCol ? dateW : 0;
   const lockW = nameW + planW + actW;
@@ -2154,12 +2273,13 @@ function ganttHtml(project, opts) {
         return `<span class="gantt-day gantt-gap" title="${fmtDate(iso(d))}">${pad2(d.getDate())}</span>`;
       }
       const weekend = showWeekends && isWeekend(d) ? " weekend" : "";
+      const holiday = showWeekends && isHoliday(d) ? " holiday" : "";
       const monthStart = monthStarts.has(i) ? " month-start" : "";
-      return `<span class="gantt-day${weekend}${monthStart}">${pad2(d.getDate())}</span>`;
+      return `<span class="gantt-day${weekend}${holiday}${monthStart}">${pad2(d.getDate())}</span>`;
     })
     .join("");
   const weekendMarks = showWeekends
-    ? days.map((d, i) => (isWeekend(d) ? `<i class="gantt-weekend" style="left:${i * dayW}px;width:${dayW}px"></i>` : "")).join("")
+    ? days.map((d, i) => (isNonWorking(d) ? `<i class="gantt-weekend${isHoliday(d) ? " holiday" : ""}" style="left:${i * dayW}px;width:${dayW}px"></i>` : "")).join("")
     : "";
   const monthLines = [...monthStarts]
     .filter((i) => i > 0)
@@ -2468,36 +2588,51 @@ function openTaskForm(project, taskItem, parent) {
         .join("")
     : `<p class="muted">${tr("noPreds")}</p>`;
   showForm(`
+    <div class="task-form">
     <h3>${taskItem ? tr("editTask") : parent ? tr("addSubtask") : tr("addTask")}</h3>
-    ${parent ? `<p class="muted">${tr("subtaskOf")}: ${esc(parent.name)}</p>` : ""}
-    ${rolled ? `<p class="hint">${tr("rolledUp")}</p>` : ""}
-    <p class="hint">${tr("baselineHint")}</p>
+    ${parent ? `<p class="muted tight">${tr("subtaskOf")}: ${esc(parent.name)}</p>` : ""}
+    ${rolled ? `<p class="hint tight">${tr("rolledUp")}</p>` : ""}
     <label>${tr("taskName")}<input name="name" value="${esc(tk.name)}" required></label>
-    <label class="chk"><input type="checkbox" name="milestone" ${tk.milestone ? "checked" : ""}> ${tr("milestone")}</label>
-    <div class="grid-2">
-      <label>${tr("plannedStart")}${dateInput("plannedStart", tk.plannedStart || tk.baseStart, "")}</label>
-      <label>${tr("plannedEnd")}${dateInput("plannedEnd", tk.plannedEnd || tk.baseEnd, "")}</label>
+    <div class="grid-3">
+      <label>${tr("status")}<select name="status">
+        <option value="not_started" ${(tk.status || "not_started") === "not_started" ? "selected" : ""}>${tr("not_started")}</option>
+        <option value="in_progress" ${tk.status === "in_progress" ? "selected" : ""}>${tr("in_progress")}</option>
+        <option value="done" ${tk.status === "done" ? "selected" : ""}>${tr("done")}</option>
+        <option value="delayed" ${tk.status === "delayed" ? "selected" : ""}>${tr("delayed")}</option>
+      </select></label>
+      <label>${tr("percent")}<input type="number" name="percent" min="0" max="100" value="${Number(tk.percent || 0)}"></label>
       <label>${tr("workDays")}<input type="number" name="workDays" min="0" step="1" value="${taskWorkDays(tk) || ""}" ${rolled || tk.milestone ? "disabled" : ""}></label>
-      <label>${tr("baseStart")}${dateInput("baseStart", tk.baseStart, "")}</label>
-      <label>${tr("baseEnd")}${dateInput("baseEnd", tk.baseEnd, "")}</label>
-      <label>${tr("actualStart")}${dateInput("actualStart", tk.actualStart, "")}</label>
-      <label>${tr("actualEnd")}${dateInput("actualEnd", tk.actualEnd, "")}</label>
+    </div>
+    <div class="row tight-flags">
+      <label class="chk"><input type="checkbox" name="milestone" ${tk.milestone ? "checked" : ""}> ${tr("milestone")}</label>
+      <label class="chk"><input type="checkbox" name="autoSchedule" ${tk.autoSchedule ? "checked" : ""}> ${tr("autoSchedule")}</label>
+    </div>
+    <div class="grid-3">
+      <fieldset>
+        <legend>${tr("planned")}</legend>
+        <label>${tr("plannedStart")}${dateInput("plannedStart", tk.plannedStart || tk.baseStart, "")}</label>
+        <label>${tr("plannedEnd")}${dateInput("plannedEnd", tk.plannedEnd || tk.baseEnd, "")}</label>
+      </fieldset>
+      <fieldset>
+        <legend>${tr("actual")}</legend>
+        <label>${tr("actualStart")}${dateInput("actualStart", tk.actualStart, "")}</label>
+        <label>${tr("actualEnd")}${dateInput("actualEnd", tk.actualEnd, "")}</label>
+      </fieldset>
+      <fieldset>
+        <legend>${tr("baseline")}</legend>
+        <label>${tr("baseStart")}${dateInput("baseStart", tk.baseStart, "")}</label>
+        <label>${tr("baseEnd")}${dateInput("baseEnd", tk.baseEnd, "")}</label>
+      </fieldset>
+    </div>
+    <div class="grid-3">
       <label>${tr("plannedCost")}<input type="number" name="plannedCost" value="${tk.plannedCost || 0}" ${disabled}></label>
       <label>${tr("actualCost")}<input type="number" name="actualCost" value="${tk.actualCost || 0}" ${disabled}></label>
-      <label>${tr("percent")}<input type="number" name="percent" min="0" max="100" value="${Number(tk.percent || 0)}"></label>
+      <p class="var-preview muted">${tr("variance")}: <b>${money(costVariance(tk.plannedCost, tk.actualCost))}</b></p>
     </div>
-    <p class="muted">${tr("dateHint")}: dd/mm/yyyy. ${tr("workDaysHint")}</p>
-    <label>${tr("status")}<select name="status">
-      <option value="not_started" ${(tk.status || "not_started") === "not_started" ? "selected" : ""}>${tr("not_started")}</option>
-      <option value="in_progress" ${tk.status === "in_progress" ? "selected" : ""}>${tr("in_progress")}</option>
-      <option value="done" ${tk.status === "done" ? "selected" : ""}>${tr("done")}</option>
-      <option value="delayed" ${tk.status === "delayed" ? "selected" : ""}>${tr("delayed")}</option>
-    </select></label>
     <h4>${tr("predecessors")}</h4>
     <div class="pred-box">${predRows}</div>
-    <label class="chk"><input type="checkbox" name="autoSchedule" ${tk.autoSchedule ? "checked" : ""}> ${tr("autoSchedule")}</label>
-    <p class="muted">${tr("autoScheduleHint")}</p>
     <label>${tr("notes")}<textarea name="notes">${esc(tk.notes || "")}</textarea></label>
+    </div>
   `, (fd, modal) => {
     const payload = {
       name: fd.get("name"),
@@ -2572,18 +2707,19 @@ function openTaskForm(project, taskItem, parent) {
     applyDependencies(project);
     rollupProject(project);
     save(state.data);
-  });
+  }, { formClass: "task-modal" });
   const sel = document.querySelector('select[name="status"]');
   if (sel) sel.value = tk.status || "not_started";
 }
 
 function showForm(inner, onSave, opts) {
   const hideSave = !!(opts && opts.hideSave);
+  const extraClass = opts && opts.formClass ? " " + opts.formClass : "";
   const closeModal = () => {
     state.modal = null;
     render();
   };
-  const modal = el(`<div class="modal-bg"><form class="modal card">
+  const modal = el(`<div class="modal-bg"><form class="modal card${extraClass}">
     <div class="modal-head">
       <button class="modal-x" type="button" data-cancel aria-label="${esc(tr("close"))}">×</button>
     </div>
@@ -2719,6 +2855,7 @@ function reportTasksOnlyTable(project, showSubs) {
         <td class="${depth ? "task-indent" : ""}">${mark}${esc(task.name)}</td>
         <td>${money(task.plannedCost)}</td>
         <td>${money(task.actualCost)}</td>
+        ${varCell(costVariance(task.plannedCost, task.actualCost))}
         <td>${fmtDate(planStart(task))}</td>
         <td>${fmtDate(planEnd(task))}</td>
         <td>${fmtDate(task.actualStart)}</td>
@@ -2731,13 +2868,123 @@ function reportTasksOnlyTable(project, showSubs) {
   return `<table class="report-table">
     <thead><tr>
       <th>${tr("taskName")}</th>
-      <th>${tr("plannedCost")}</th><th>${tr("actualCost")}</th>
+      <th>${tr("plannedCost")}</th><th>${tr("actualCost")}</th><th>${tr("variance")}</th>
       <th>${tr("plannedStart")}</th><th>${tr("plannedEnd")}</th>
       <th>${tr("actualStart")}</th><th>${tr("actualEnd")}</th>
       <th>${tr("status")}</th><th>${tr("percent")}</th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
+}
+
+function usersWithEmail() {
+  return (state.data.users || []).filter((u) => String(u.email || "").includes("@"));
+}
+
+function reportEmailHtml(project) {
+  const s = projectStats(project);
+  const dir = state.lang === "ar" ? "rtl" : "ltr";
+  const extra = (project.extra || [])
+    .filter((x) => extraLabel(x) && String(x.value || "").trim())
+    .map((x) => `<tr><td>${esc(extraLabel(x))}</td><td>${esc(x.value)}</td></tr>`)
+    .join("");
+  const taskRows = flatRows(project.tasks)
+    .filter(({ depth }) => state.reportShowSubs || depth === 0)
+    .map(({ task, depth }) => {
+      const v = costVariance(task.plannedCost, task.actualCost);
+      return `<tr>
+        <td>${depth ? "— " : ""}${esc(task.name)}</td>
+        <td>${money(task.plannedCost)}</td>
+        <td>${money(task.actualCost)}</td>
+        <td>${money(v)}</td>
+        <td>${fmtDate(planStart(task))} → ${fmtDate(planEnd(task))}</td>
+        <td>${Number(task.percent || 0)}%</td>
+      </tr>`;
+    })
+    .join("");
+  return `<div dir="${dir}" style="font-family:Arial,Tahoma,sans-serif;font-size:13px">
+    <h2>${esc(project.name)}</h2>
+    <table border="1" cellpadding="6" cellspacing="0" width="100%">
+      <tr><td>${esc(tr("hospital"))}</td><td>${esc(project.hospital || "")}</td></tr>
+      <tr><td>${esc(tr("location"))}</td><td>${esc(project.location || "")}</td></tr>
+      <tr><td>${esc(tr("device"))}</td><td>${esc(deviceLabel(project.device))}</td></tr>
+      ${extra}
+    </table>
+    <p><b>${esc(tr("progress"))}:</b> ${s.progress}% · <b>${esc(tr("variance"))}:</b> ${money(costVariance(s.plannedCost, s.actualCost))} ${esc(tr("currency"))}</p>
+    <h3>${esc(tr("reportTasksPage"))}</h3>
+    <table border="1" cellpadding="6" cellspacing="0" width="100%">
+      <tr>
+        <th>${esc(tr("taskName"))}</th>
+        <th>${esc(tr("plannedCost"))}</th>
+        <th>${esc(tr("actualCost"))}</th>
+        <th>${esc(tr("variance"))}</th>
+        <th>${esc(tr("planned"))}</th>
+        <th>${esc(tr("percent"))}</th>
+      </tr>
+      ${taskRows}
+    </table>
+  </div>`;
+}
+
+function buildEmailReport(project) {
+  const s = projectStats(project);
+  const infoRows = [
+    [tr("projectName"), project.name],
+    [tr("hospital"), project.hospital || ""],
+    [tr("location"), project.location || ""],
+    [tr("device"), deviceLabel(project.device)]
+  ].concat(
+    (project.extra || [])
+      .filter((x) => extraLabel(x) && String(x.value || "").trim())
+      .map((x) => [extraLabel(x), x.value])
+  );
+  const kpiRows = [
+    [tr("progress"), s.progress + "%"],
+    [tr("plannedCost"), money(s.plannedCost)],
+    [tr("actualCost"), money(s.actualCost)],
+    [tr("variance"), money(costVariance(s.plannedCost, s.actualCost))]
+  ];
+  const taskHead = [tr("taskName"), tr("plannedCost"), tr("actualCost"), tr("variance"), tr("plannedStart"), tr("plannedEnd"), tr("percent")];
+  const taskRows = flatRows(project.tasks)
+    .filter(({ depth }) => state.reportShowSubs || depth === 0)
+    .map(({ task, depth }) => [
+      (depth ? "— " : "") + task.name,
+      money(task.plannedCost),
+      money(task.actualCost),
+      money(costVariance(task.plannedCost, task.actualCost)),
+      fmtDate(planStart(task)),
+      fmtDate(planEnd(task)),
+      String(Number(task.percent || 0)) + "%"
+    ]);
+  return {
+    subject: `${tr("projectReport")}: ${project.name}`,
+    title: project.name,
+    dir: state.lang === "ar" ? "rtl" : "ltr",
+    html: reportEmailHtml(project),
+    infoTitle: tr("projectInfo"),
+    kpiTitle: tr("overallProgress"),
+    taskTitle: tr("reportTasksPage"),
+    infoRows,
+    kpiRows,
+    taskHead,
+    taskRows
+  };
+}
+
+function sendReportPdf(project, toValue) {
+  let emails = [];
+  if (toValue === "all") emails = usersWithEmail().map((u) => String(u.email || "").trim());
+  else emails = [String(toValue || "").trim()];
+  emails = emails.filter((e) => e.includes("@"));
+  if (!emails.length) {
+    alert(tr("sendPdfNeedEmail"));
+    return;
+  }
+  const payload = buildEmailReport(project);
+  showToast(tr("sendPdfWait"));
+  Drive.callBridge(Object.assign({ action: "emailReport", to: emails.join(",") }, payload))
+    .then(() => showToast(tr("sendPdfOk")))
+    .catch(() => alert(tr("sendPdfFail")));
 }
 
 function printReport() {
@@ -2783,18 +3030,21 @@ function reportsView() {
     <div class="row no-print report-toolbar-wrap" style="justify-content:space-between">
       <h2>${tr("reports")}</h2>
       <div class="row report-toolbar">
-        <label style="margin:0">${tr("chooseProject")}
+        <label class="report-field">${tr("chooseProject")}
           <select name="which">${options}</select>
         </label>
-        ${single ? `<label class="chk"><input type="checkbox" data-subs ${state.reportShowSubs ? "checked" : ""}> ${tr("showSubtasks")}</label>
-        <label class="chk"><input type="checkbox" data-gantt ${state.reportShowGantt ? "checked" : ""}> ${tr("showGantt")}</label>` : ""}
-        <label style="margin:0">${tr("printOrient")}
+        ${single ? `<div class="report-chks">
+          <label class="chk"><input type="checkbox" data-subs ${state.reportShowSubs ? "checked" : ""}> ${tr("showSubtasks")}</label>
+          <label class="chk"><input type="checkbox" data-gantt ${state.reportShowGantt ? "checked" : ""}> ${tr("showGantt")}</label>
+        </div>
+        ${ganttOptsHtml()}` : ""}
+        <label class="report-field">${tr("printOrient")}
           <select data-printorient>
             <option value="portrait">${tr("printPortrait")}</option>
             <option value="landscape">${tr("printLandscape")}</option>
           </select>
         </label>
-        <label style="margin:0">${tr("printSize")}
+        <label class="report-field">${tr("printSize")}
           <select data-printfit>
             <option value="auto">${tr("printAuto")}</option>
             <option value="1">${tr("printPages1")}</option>
@@ -2803,6 +3053,13 @@ function reportsView() {
             <option value="4">${tr("printPages4")}</option>
           </select>
         </label>
+        ${single ? `<label class="report-field">${tr("sendPdfTo")}
+          <select data-mail-to>
+            <option value="all">${tr("sendPdfAll")}</option>
+            ${usersWithEmail().map((u) => `<option value="${esc(u.email)}">${esc(userDisplayName(u))} — ${esc(u.email)}</option>`).join("")}
+          </select>
+        </label>
+        <button class="btn secondary" type="button" data-sendpdf>${tr("sendPdf")}</button>` : ""}
         <button class="btn" type="button" data-print>${tr("print")}</button>
       </div>
     </div>
@@ -2853,6 +3110,14 @@ function reportsView() {
     render();
   };
   box.querySelector("[data-print]").onclick = () => printReport();
+  const sendPdf = box.querySelector("[data-sendpdf]");
+  if (sendPdf) {
+    sendPdf.onclick = () => {
+      const pick = box.querySelector("[data-mail-to]");
+      sendReportPdf(list[0], pick ? pick.value : "all");
+    };
+  }
+  bindGanttOpts(box);
   bindGanttScroll(box);
   return box;
 }
@@ -2866,7 +3131,7 @@ function usersView() {
     </div>
     <div class="card table-scroll" style="padding:8px 16px; margin-top:12px">
       <table class="stack-table">
-        <thead><tr><th>${tr("username")}</th><th>${tr("displayName")}</th><th>${tr("password")}</th><th>${tr("role")}</th><th>${tr("deviceScope")}</th><th></th></tr></thead>
+        <thead><tr><th>${tr("username")}</th><th>${tr("displayNameAr")}</th><th>${tr("displayNameEn")}</th><th>${tr("password")}</th><th>${tr("role")}</th><th>${tr("deviceScope")}</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -2885,7 +3150,8 @@ function usersView() {
   state.data.users.forEach((u) => {
     const row = el(`<tr>
       <td data-label="${esc(tr("username"))}">${esc(u.username)}</td>
-      <td data-label="${esc(tr("displayName"))}">${esc(u.name)}</td>
+      <td data-label="${esc(tr("displayNameAr"))}">${esc(u.nameAr || u.name)}</td>
+      <td data-label="${esc(tr("displayNameEn"))}">${esc(u.nameEn || "")}</td>
       <td data-label="${esc(tr("password"))}">${esc(u.password || "")}</td>
       <td data-label="${esc(tr("role"))}">${esc(u.role === "pm" ? tr("pm") : (u.roleTitle || tr("otherRole")))}</td>
       <td data-label="${esc(tr("deviceScope"))}">${esc(!u.deviceScope || u.deviceScope === "all" ? tr("allDevices") : deviceLabel(u.deviceScope))}</td>
@@ -2930,13 +3196,52 @@ function usersView() {
     };
     devs.append(row);
   });
+  const holBox = el(`<div>
+    <div class="row" style="justify-content:space-between; margin-top:22px">
+      <h2>${tr("holidays")}</h2>
+      <button class="btn secondary" data-addhol>${tr("addHoliday")}</button>
+    </div>
+    <p class="hint">${tr("workDaysHint")}</p>
+    <div class="card table-scroll" style="padding:8px 16px; margin-top:12px">
+      <table class="stack-table">
+        <thead><tr><th>${tr("holidayDate")}</th><th>${tr("holidayNameAr")}</th><th>${tr("holidayNameEn")}</th><th></th></tr></thead>
+        <tbody data-hols></tbody>
+      </table>
+    </div>
+  </div>`);
+  box.append(holBox);
+  const hols = box.querySelector("[data-hols]");
+  (state.data.holidays || [])
+    .slice()
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+    .forEach((h) => {
+      const row = el(`<tr>
+        <td data-label="${esc(tr("holidayDate"))}">${fmtDate(h.date)}</td>
+        <td data-label="${esc(tr("holidayNameAr"))}">${esc(h.ar || "")}</td>
+        <td data-label="${esc(tr("holidayNameEn"))}">${esc(h.en || "")}</td>
+        <td class="row actions">
+          <button class="btn small" data-edhol>${tr("edit")}</button>
+          <button class="btn small danger" data-delhol>${tr("delete")}</button>
+        </td>
+      </tr>`);
+      row.querySelector("[data-edhol]").onclick = () => openHolidayForm(h);
+      row.querySelector("[data-delhol]").onclick = () => {
+        if (!confirm(tr("confirmDelete"))) return;
+        state.data.holidays = (state.data.holidays || []).filter((x) => x.id !== h.id);
+        rescheduleFromCalendar();
+        save(state.data);
+        render();
+      };
+      hols.append(row);
+    });
   box.querySelector("[data-add]").onclick = () => openUserForm(null);
   box.querySelector("[data-adddev]").onclick = () => openDeviceForm();
+  box.querySelector("[data-addhol]").onclick = () => openHolidayForm();
   return box;
 }
 
 function openUserForm(user) {
-  const u = user || { username: "", name: "", email: "", role: "other", roleTitle: "", password: "", deviceScope: "all" };
+  const u = user || { username: "", name: "", nameAr: "", nameEn: "", email: "", role: "other", roleTitle: "", password: "", deviceScope: "all" };
   const scopeOpts = [`<option value="all">${tr("allDevices")}</option>`]
     .concat((state.data.devices || []).map((d) => `<option value="${esc(d.id)}">${esc(deviceLabel(d.id))}</option>`))
     .join("");
@@ -2945,25 +3250,28 @@ function openUserForm(user) {
     <p class="hint">${tr("userLoginHint")}</p>
     <div class="grid-2">
       <label>${tr("username")}<input name="username" value="${esc(u.username)}" required autocomplete="off"></label>
-      <label>${tr("displayName")}<input name="name" value="${esc(u.name)}" required autocomplete="off"></label>
       <label>${tr("email")}<input name="email" type="email" value="${esc(u.email || "")}" autocomplete="off"></label>
+      <label>${tr("displayNameAr")}<input name="nameAr" value="${esc(u.nameAr || u.name || "")}" autocomplete="off"></label>
+      <label>${tr("displayNameEn")}<input name="nameEn" value="${esc(u.nameEn || "")}" autocomplete="off"></label>
       <label>${tr("role")}<select name="role">
         <option value="pm">${tr("pm")}</option>
         <option value="other">${tr("otherRole")}</option>
       </select></label>
+      <label>${tr("deviceScope")}<select name="deviceScope">${scopeOpts}</select></label>
     </div>
-    <label>${tr("deviceScope")}<select name="deviceScope">${scopeOpts}</select></label>
     <label>${tr("roleTitle")}<input name="roleTitle" value="${esc(u.roleTitle || "")}" placeholder="${esc(tr("roleTitleHint"))}"></label>
     <label>${tr("password")}<input name="password" type="text" value="${esc(u.password || "")}" autocomplete="off"${user ? "" : " minlength=\"8\" required"}></label>
   `, (fd, modal) => {
     const payload = {
       username: String(fd.get("username") || "").trim(),
-      name: String(fd.get("name") || "").trim(),
+      nameAr: String(fd.get("nameAr") || "").trim(),
+      nameEn: String(fd.get("nameEn") || "").trim(),
       email: fd.get("email"),
       role: fd.get("role"),
       deviceScope: String(fd.get("deviceScope") || "all"),
       roleTitle: fd.get("role") === "pm" ? "" : String(fd.get("roleTitle") || "").trim()
     };
+    payload.name = payload.nameAr || payload.nameEn;
     if (!payload.username || !payload.name) {
       modal.querySelector(".error").textContent = tr("required");
       return false;
@@ -2997,6 +3305,38 @@ function openUserForm(user) {
   });
   document.querySelector('select[name="role"]').value = u.role === "pm" ? "pm" : "other";
   document.querySelector('select[name="deviceScope"]').value = u.deviceScope || "all";
+}
+
+function openHolidayForm(holiday) {
+  const h = holiday || { date: "", ar: "", en: "" };
+  showForm(`
+    <h3>${holiday ? tr("edit") : tr("addHoliday")}</h3>
+    <label>${tr("holidayDate")}${dateInput("date", h.date, "")}</label>
+    <label>${tr("holidayNameAr")}<input name="ar" value="${esc(h.ar || "")}" required></label>
+    <label>${tr("holidayNameEn")}<input name="en" value="${esc(h.en || "")}" required></label>
+  `, (fd, modal) => {
+    const date = parseDmy(fd.get("date"));
+    if (!date) {
+      modal.querySelector(".error").textContent = tr("dateInvalid");
+      return false;
+    }
+    const ar = String(fd.get("ar") || "").trim();
+    const en = String(fd.get("en") || "").trim();
+    if (!ar || !en) {
+      modal.querySelector(".error").textContent = tr("required");
+      return false;
+    }
+    if (holiday) {
+      holiday.date = date;
+      holiday.ar = ar;
+      holiday.en = en;
+    } else {
+      state.data.holidays = state.data.holidays || [];
+      state.data.holidays.push({ id: uid(), date, ar, en });
+    }
+    rescheduleFromCalendar();
+    return save(state.data, true);
+  });
 }
 
 function openDeviceForm(device) {
@@ -3036,7 +3376,8 @@ function profileView() {
     </div>
     <form class="card" style="padding:20px; max-width:560px">
       <p class="muted">${tr("currentUser")}: ${esc(u.username)} · ${esc(roleLabel(u))}</p>
-      <label>${tr("displayName")}<input name="name" value="${esc(u.name)}" ${isPm() ? "" : "disabled"}></label>
+      <label>${tr("displayNameAr")}<input name="nameAr" value="${esc(u.nameAr || u.name || "")}" ${isPm() ? "" : "disabled"}></label>
+      <label>${tr("displayNameEn")}<input name="nameEn" value="${esc(u.nameEn || "")}" ${isPm() ? "" : "disabled"}></label>
       <label>${tr("email")}<input name="email" type="email" value="${esc(u.email || "")}" ${isPm() ? "" : "disabled"}></label>
       ${isPm() ? `<label>${tr("username")}<input name="username" value="${esc(u.username)}"></label>` : `<p>${tr("username")}: <b>${esc(u.username)}</b></p>`}
       <label>${tr("password")}<input name="password" type="text" minlength="8" value="${esc(u.password || "")}" autocomplete="off"></label>
@@ -3051,7 +3392,9 @@ function profileView() {
     const err = box.querySelector(".error");
     const pass = String(fd.get("password") || "");
     if (isPm()) {
-      u.name = fd.get("name");
+      u.nameAr = String(fd.get("nameAr") || "").trim();
+      u.nameEn = String(fd.get("nameEn") || "").trim();
+      syncUserNames(u);
       u.email = fd.get("email");
       if (fd.get("username")) u.username = String(fd.get("username")).trim();
     }
