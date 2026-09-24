@@ -107,6 +107,36 @@ textarea { min-height: 80px; resize: vertical; }
 .page { padding: 22px; max-width: 1400px; margin: 0 auto; }
 .table-scroll { overflow: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
 .project-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.project-layout {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  margin-top: 12px;
+}
+.project-side {
+  position: sticky;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 8px;
+}
+.side-link {
+  text-align: start;
+  border: 0;
+  background: transparent;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--ink);
+  font-weight: 600;
+}
+.side-link.is-on { background: #e6f3f1; color: var(--teal-dark); }
+.project-panel { display: none; }
+.project-panel.is-on { display: block; }
 .report-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 .report-toolbar label { margin: 0; min-width: 160px; flex: 1; }
 
@@ -135,11 +165,12 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 .progress-pct { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 2.6em; }
 
 .gantt-wrap {
-  padding: 0;
-  overflow: hidden;
-  height: min(70vh, 680px);
+  padding: 0 0 18px;
+  overflow: auto;
+  height: min(72vh, 720px);
   display: flex;
   flex-direction: column;
+  scrollbar-gutter: stable;
 }
 .gantt-hint { display: none; margin: 0 0 8px; }
 .gantt {
@@ -150,18 +181,31 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   --head-h: 48px;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   direction: ltr;
 }
 .gantt-scroll {
   position: relative;
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: scroll;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   touch-action: pan-x pan-y;
+  padding-bottom: 8px;
+  scrollbar-width: auto;
+  scrollbar-color: #8aa0ad #e8eef2;
 }
+.gantt-scroll::-webkit-scrollbar {
+  height: 16px;
+  width: 16px;
+}
+.gantt-scroll::-webkit-scrollbar-thumb {
+  background: #8aa0ad;
+  border-radius: 8px;
+  border: 3px solid #e8eef2;
+}
+.gantt-scroll::-webkit-scrollbar-track { background: #e8eef2; }
 .gantt-head,
 .gantt-row {
   display: flex;
@@ -333,10 +377,18 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   .kpi { padding: 12px; }
   .kpi b { font-size: 18px; }
   h2 { font-size: 18px; }
+  .project-layout { grid-template-columns: 1fr; }
+  .project-side {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 6px;
+  }
+  .side-link { white-space: nowrap; flex: 0 0 auto; }
   .project-head .row { width: 100%; }
   .project-head .btn { flex: 1 1 calc(50% - 8px); }
   .gantt-hint { display: block; }
-  .gantt-wrap { height: min(70vh, 520px); min-height: 240px; }
+  .gantt-wrap { height: min(68vh, 560px); min-height: 280px; overflow: auto; padding-bottom: 20px; }
   .gantt {
     --name-w: 110px;
     --date-w: 0px;

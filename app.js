@@ -104,6 +104,11 @@ const I18N = {
     reportTasksPage: "مهام المشروع",
     overallProgress: "تقدم المشروع",
     taskCount: "عدد المهام",
+    tabOverview: "التقدم",
+    tabGantt: "مخطط جانت",
+    tabTasks: "المهام",
+    tabInfo: "معلومات المشروع",
+    tabFiles: "المرفقات",
     deviceScope: "قسم الجهاز",
     allDevices: "كل الأجهزة",
     addDevice: "إضافة نوع جهاز",
@@ -290,6 +295,11 @@ const I18N = {
     reportTasksPage: "Project tasks",
     overallProgress: "Project progress",
     taskCount: "Task count",
+    tabOverview: "Progress",
+    tabGantt: "Gantt chart",
+    tabTasks: "Tasks",
+    tabInfo: "Project information",
+    tabFiles: "Attachments",
     deviceScope: "Device department",
     allDevices: "All devices",
     addDevice: "Add device type",
@@ -942,6 +952,7 @@ const state = {
   printFit: "auto",
   modal: null,
   expanded: {},
+  projectTab: "gantt",
   driveReady: false,
   driveSaving: false,
   driveError: "",
@@ -1350,14 +1361,20 @@ function projectView() {
   rollupProject(project);
   computeCritical(project);
   const s = projectStats(project);
+  const tab = state.projectTab || "gantt";
+  const sideBtn = (id, label) =>
+    `<button class="side-link${tab === id ? " is-on" : ""}" type="button" data-tab="${id}">${label}</button>`;
+  const extraRows = (project.extra || [])
+    .filter((x) => extraLabel(x))
+    .map((x) => `<tr><th>${esc(extraLabel(x))}</th><td>${esc(x.value || "—")}</td></tr>`)
+    .join("");
+  const fileCount = (project.docFiles || []).length + (project.costFiles || []).length;
   const box = el(`<div>
     <div class="project-head">
       <div>
         <h2>${esc(project.name)}</h2>
       </div>
       <div class="row no-print">
-        <button class="btn secondary" data-info>${tr("projectInfo")}</button>
-        <button class="btn secondary" data-files>${tr("projectFiles")}${((project.docFiles || []).length + (project.costFiles || []).length) ? ` (${(project.docFiles || []).length + (project.costFiles || []).length})` : ""}</button>
         <button class="btn secondary" data-rep>${tr("projectReport")}</button>
         ${isPm() ? `<button class="btn secondary" data-base>${tr("setBaseline")}</button>
         <button class="btn danger" data-reset-dates>${tr("resetDates")}</button>
@@ -1365,47 +1382,95 @@ function projectView() {
         <button class="btn danger" data-delp>${tr("delete")}</button>` : ""}
       </div>
     </div>
-    <div class="kpis">
-      <div class="card kpi"><span class="muted">${tr("plannedCost")}</span><b>${money(s.plannedCost)}</b></div>
-      <div class="card kpi"><span class="muted">${tr("actualCost")}</span><b>${money(s.actualCost)}</b></div>
-      <div class="card kpi"><span class="muted">${tr("plannedDays")}</span><b>${s.plannedDays} ${tr("days")}</b></div>
-      <div class="card kpi"><span class="muted">${tr("actualDays")}</span><b>${s.actualDays} ${tr("days")}</b></div>
-    </div>
-    <h3>${tr("gantt")}</h3>
-    <p class="hint gantt-hint no-print">${tr("ganttSwipe")}</p>
-    <div class="legend">
-      <span><i class="swatch baseline"></i>${tr("baseline")}</span>
-      <span><i class="swatch planned"></i>${tr("planned")}</span>
-      <span><i class="swatch actual"></i>${tr("actual")}</span>
-      <span><i class="swatch critical"></i>${tr("critical")}</span>
-      <span><i class="swatch milestone"></i>${tr("milestone")}</span>
-    </div>
-    <div class="card gantt-wrap">${ganttHtml(project)}</div>
-    <div class="row" style="margin:18px 0 8px; justify-content:space-between">
-      <h3>${tr("tasks")}</h3>
-      ${isPm() ? `<button class="btn" data-addt>${tr("addTask")}</button>` : ""}
-    </div>
-    <div class="card table-scroll" style="padding:8px 16px">
-      <table class="stack-table">
-        <thead><tr>
-          <th>#</th><th>${tr("taskName")}</th><th>${tr("predecessors")}</th><th>${tr("status")}</th>
-          <th>${tr("percent")}</th>
-          <th>${tr("plannedStart")} / ${tr("plannedEnd")}</th>
-          <th>${tr("actualStart")} / ${tr("actualEnd")}</th>
-          <th>${tr("slack")}</th>
-          <th>${tr("plannedCost")}</th><th>${tr("actualCost")}</th>
-          ${isPm() ? "<th></th>" : ""}
-        </tr></thead>
-        <tbody></tbody>
-      </table>
+    <div class="project-layout">
+      <aside class="project-side no-print">
+        ${sideBtn("overview", tr("tabOverview"))}
+        ${sideBtn("info", tr("tabInfo"))}
+        ${sideBtn("gantt", tr("tabGantt"))}
+        ${sideBtn("tasks", tr("tabTasks"))}
+        ${sideBtn("files", tr("tabFiles"))}
+      </aside>
+      <div class="project-main">
+        <section class="project-panel${tab === "overview" ? " is-on" : ""}" data-panel="overview">
+          <h3>${tr("overallProgress")}</h3>
+          <div class="kpis">
+            <div class="card kpi"><span class="muted">${tr("progress")}</span><b>${s.progress}%</b></div>
+            <div class="card kpi"><span class="muted">${tr("taskCount")}</span><b>${s.count}</b></div>
+            <div class="card kpi"><span class="muted">${tr("plannedCost")}</span><b>${money(s.plannedCost)}</b></div>
+            <div class="card kpi"><span class="muted">${tr("actualCost")}</span><b>${money(s.actualCost)}</b></div>
+            <div class="card kpi"><span class="muted">${tr("plannedDays")}</span><b>${s.plannedDays} ${tr("days")}</b></div>
+            <div class="card kpi"><span class="muted">${tr("actualDays")}</span><b>${s.actualDays} ${tr("days")}</b></div>
+          </div>
+        </section>
+        <section class="project-panel${tab === "info" ? " is-on" : ""}" data-panel="info">
+          <div class="row" style="justify-content:space-between">
+            <h3>${tr("projectInfo")}</h3>
+            ${isPm() ? `<button class="btn" data-info>${tr("edit")}</button>` : ""}
+          </div>
+          <table class="info-table">
+            <tr><th>${tr("projectName")}</th><td>${esc(project.name)}</td></tr>
+            <tr><th>${tr("hospital")}</th><td>${esc(project.hospital || "")}</td></tr>
+            <tr><th>${tr("location")}</th><td>${esc(project.location || "")}</td></tr>
+            <tr><th>${tr("device")}</th><td>${esc(deviceLabel(project.device))}</td></tr>
+            ${extraRows}
+          </table>
+        </section>
+        <section class="project-panel${tab === "gantt" ? " is-on" : ""}" data-panel="gantt">
+          <h3>${tr("gantt")}</h3>
+          <p class="hint gantt-hint no-print">${tr("ganttSwipe")}</p>
+          <div class="legend">
+            <span><i class="swatch baseline"></i>${tr("baseline")}</span>
+            <span><i class="swatch planned"></i>${tr("planned")}</span>
+            <span><i class="swatch actual"></i>${tr("actual")}</span>
+            <span><i class="swatch critical"></i>${tr("critical")}</span>
+            <span><i class="swatch milestone"></i>${tr("milestone")}</span>
+          </div>
+          <div class="card gantt-wrap">${ganttHtml(project)}</div>
+        </section>
+        <section class="project-panel${tab === "tasks" ? " is-on" : ""}" data-panel="tasks">
+          <div class="row" style="margin:0 0 8px; justify-content:space-between">
+            <h3>${tr("tasks")}</h3>
+            ${isPm() ? `<button class="btn" data-addt>${tr("addTask")}</button>` : ""}
+          </div>
+          <div class="card table-scroll" style="padding:8px 16px">
+            <table class="stack-table">
+              <thead><tr>
+                <th>#</th><th>${tr("taskName")}</th><th>${tr("predecessors")}</th><th>${tr("status")}</th>
+                <th>${tr("percent")}</th>
+                <th>${tr("plannedStart")} / ${tr("plannedEnd")}</th>
+                <th>${tr("actualStart")} / ${tr("actualEnd")}</th>
+                <th>${tr("slack")}</th>
+                <th>${tr("plannedCost")}</th><th>${tr("actualCost")}</th>
+                ${isPm() ? "<th></th>" : ""}
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="project-panel${tab === "files" ? " is-on" : ""}" data-panel="files">
+          <div class="row" style="justify-content:space-between">
+            <h3>${tr("projectFiles")}</h3>
+            <button class="btn" data-files>${tr("projectFiles")}${fileCount ? ` (${fileCount})` : ""}</button>
+          </div>
+          <p class="muted">${fileCount ? fileCount : tr("noFiles")}</p>
+        </section>
+      </div>
     </div>
   </div>`);
   const tbody = box.querySelector("tbody");
-  visibleTaskRows(project).forEach((rowInfo) => {
-    const label = rowInfo.depth ? `${rowInfo.parent ? project.tasks.indexOf(rowInfo.parent) + 1 : ""}.${rowInfo.index + 1}` : String(rowInfo.index + 1);
-    tbody.append(taskRow(project, rowInfo.task, rowInfo.parent, rowInfo.index, label, !!rowInfo.depth, isExpanded(rowInfo.task.id), rowInfo.last));
-  });
+  if (tbody) {
+    visibleTaskRows(project).forEach((rowInfo) => {
+      const label = rowInfo.depth ? `${rowInfo.parent ? project.tasks.indexOf(rowInfo.parent) + 1 : ""}.${rowInfo.index + 1}` : String(rowInfo.index + 1);
+      tbody.append(taskRow(project, rowInfo.task, rowInfo.parent, rowInfo.index, label, !!rowInfo.depth, isExpanded(rowInfo.task.id), rowInfo.last));
+    });
+  }
   bindGanttScroll(box);
+  box.querySelectorAll("[data-tab]").forEach((btn) => {
+    btn.onclick = () => {
+      state.projectTab = btn.getAttribute("data-tab");
+      render();
+    };
+  });
   box.querySelectorAll("[data-twist]").forEach((btn) => {
     btn.onclick = (e) => {
       e.preventDefault();
@@ -1415,8 +1480,10 @@ function projectView() {
   });
   const addt = box.querySelector("[data-addt]");
   if (addt) addt.onclick = () => openTaskForm(project, null, null);
-  box.querySelector("[data-info]").onclick = () => openProjectForm(project);
-  box.querySelector("[data-files]").onclick = () => openProjectFiles(project);
+  const info = box.querySelector("[data-info]");
+  if (info) info.onclick = () => openProjectForm(project);
+  const files = box.querySelector("[data-files]");
+  if (files) files.onclick = () => openProjectFiles(project);
   const copy = box.querySelector("[data-copy]");
   if (copy) copy.onclick = () => copyProject(project);
   const base = box.querySelector("[data-base]");
@@ -1682,15 +1749,33 @@ function keyGanttDates(project) {
     .sort((a, b) => a - b);
 }
 
-function sparseGanttCols(project) {
+function fitGanttCols(project, innerWidth) {
   const keys = keyGanttDates(project);
   if (!keys.length) return [];
+  const minDayW = 8;
+  const maxCols = Math.max(keys.length, Math.floor(Math.max(innerWidth, 240) / minDayW));
+  const all = enumerateDays(keys[0], keys[keys.length - 1]);
+  const keyMs = new Set(keys.map((d) => d.getTime()));
+  const keep = new Set(keyMs);
+  if (all.length > maxCols) {
+    const idle = all.filter((d) => !keyMs.has(d.getTime()));
+    const extra = Math.max(0, maxCols - keys.length);
+    if (extra && idle.length) {
+      const step = idle.length / extra;
+      for (let i = 0; i < extra; i++) {
+        const idx = Math.min(idle.length - 1, Math.floor(i * step + step / 2));
+        keep.add(idle[idx].getTime());
+      }
+    }
+  } else {
+    all.forEach((d) => keep.add(d.getTime()));
+  }
   const cols = [];
-  keys.forEach((d, i) => {
-    if (i) {
-      const prev = keys[i - 1];
-      const gap = Math.round((d - prev) / 86400000);
-      if (gap > 1) cols.push({ gap: true, date: prev });
+  all.forEach((d) => {
+    if (!keep.has(d.getTime())) return;
+    const prev = cols[cols.length - 1];
+    if (prev && Math.round((d - prev.date) / 86400000) > 1) {
+      cols.push({ gap: true, date: prev.date });
     }
     cols.push({ gap: false, date: d });
   });
@@ -1714,12 +1799,13 @@ function ganttColIndex(cols, isoDate) {
 function ganttHtml(project, opts) {
   computeCritical(project);
   const compact = !!(opts && opts.compact);
-  const sparse = compact ? sparseGanttCols(project) : null;
+  const targetW = Number(opts && opts.width) || 980;
+  const sparse = compact ? fitGanttCols(project, Math.max(240, targetW - 160)) : null;
   const cols = sparse && sparse.length ? sparse : null;
   const dates = cols && cols.length ? cols.map((c) => c.date) : collectDates(project);
   if (!dates.length) return `<p class="muted">—</p>`;
-  const min = cols ? cols[0].date : startOfMonth(new Date(Math.min(...dates)));
-  const max = cols ? cols[cols.length - 1].date : endOfMonth(new Date(Math.max(...dates)));
+  const min = cols ? cols[0].date : new Date(Math.min(...dates));
+  const max = cols ? cols[cols.length - 1].date : new Date(Math.max(...dates));
   const days = cols ? cols.map((c) => c.date) : enumerateDays(min, max);
   const mobile = window.matchMedia("(max-width: 800px)").matches;
   const hideDates = compact || mobile;
@@ -1727,7 +1813,9 @@ function ganttHtml(project, opts) {
   const dateW = hideDates ? 0 : 132;
   const colCount = days.length;
   const lockW = nameW + (hideDates ? 0 : dateW * 2);
-  const dayW = compact ? Math.max(8, Math.min(16, Math.floor((720 - lockW) / Math.max(colCount, 1)))) : mobile ? 14 : 16;
+  const dayW = compact
+    ? Math.max(8, Math.min(16, Math.floor((targetW - lockW) / Math.max(colCount, 1))))
+    : mobile ? 14 : 16;
   const rowH = mobile ? 28 : 24;
   const headH = 48;
   const scaleW = colCount * dayW;
@@ -2376,7 +2464,7 @@ function reportsView() {
     </section>
     ${single && state.reportShowGantt ? `<section class="report-gantt-page print-sheet">
       <h3>${tr("gantt")}</h3>
-      <div class="card gantt-wrap report-gantt">${ganttHtml(list[0], { compact: true })}</div>
+      <div class="card gantt-wrap report-gantt">${ganttHtml(list[0], { compact: true, width: 980 })}</div>
     </section>` : ""}
   </div>`);
   const sel = box.querySelector("select[name=which]");
