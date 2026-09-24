@@ -76,7 +76,7 @@ const I18N = {
     baselineHint: "عند «تحديث خط الأساس»: المتوقع الفارغ يصبح مثل خط الأساس، والمتوقع الموجود يُنسخ إلى خط الأساس.",
     predecessors: "الاعتماديات (Predecessors)",
     predType: "النوع",
-    lag: "التأخير/التقديم (أيام)",
+    lag: "التأخير/التقديم (أيام عمل)",
     depFS: "FS إنهاء-بدء",
     depSS: "SS بدء-بدء",
     depFF: "FF إنهاء-إنهاء",
@@ -86,6 +86,8 @@ const I18N = {
     critical: "مسار حرج",
     autoSchedule: "ضبط التواريخ تلقائياً حسب الاعتماديات",
     autoScheduleHint: "يبقى الخيار محفوظاً. عند كل حفظ تُحدَّث التواريخ المتوقعة لهذه المهمة من الاعتماديات.",
+    workDays: "عدد الأيام",
+    workDaysHint: "الجمعة والسبت عطلة. العدد هو أيام العمل فقط، وتُحسب التواريخ مع تخطي العطل.",
     noPreds: "لا اعتماديات",
     not_started: "لم تبدأ",
     in_progress: "قيد التنفيذ",
@@ -284,7 +286,7 @@ const I18N = {
     baselineHint: "On Update baseline: empty planned dates become the baseline, and existing planned dates are copied onto the baseline.",
     predecessors: "Predecessors",
     predType: "Type",
-    lag: "Lag / lead (days)",
+    lag: "Lag / lead (work days)",
     depFS: "FS finish-to-start",
     depSS: "SS start-to-start",
     depFF: "FF finish-to-finish",
@@ -294,6 +296,8 @@ const I18N = {
     critical: "Critical path",
     autoSchedule: "Shift dates automatically from dependencies",
     autoScheduleHint: "This stays saved. Each save updates this task’s planned dates from its predecessors.",
+    workDays: "Duration (days)",
+    workDaysHint: "Friday and Saturday are non-working. Duration is working days only, and dates skip weekends.",
     noPreds: "No predecessors",
     not_started: "Not started",
     in_progress: "In progress",
@@ -465,6 +469,79 @@ function parseDay(d) {
   return dt;
 }
 
+function isWeekend(d) {
+  const dt = d instanceof Date ? d : parseDay(d);
+  if (!dt) return false;
+  const w = dt.getDay();
+  return w === 5 || w === 6;
+}
+
+function nextWorkDay(value) {
+  let dt = parseDay(value);
+  if (!dt) return "";
+  while (isWeekend(dt)) dt.setDate(dt.getDate() + 1);
+  return iso(dt);
+}
+
+function addWorkDaysIso(value, n) {
+  let dt = parseDay(value);
+  if (!dt) return "";
+  n = Number(n || 0);
+  if (!n) return nextWorkDay(iso(dt));
+  const step = n > 0 ? 1 : -1;
+  let left = Math.abs(n);
+  while (left > 0) {
+    dt.setDate(dt.getDate() + step);
+    if (!isWeekend(dt)) left--;
+  }
+  return iso(dt);
+}
+
+function workDaysBetween(a, b) {
+  const da = parseDay(a);
+  const db = parseDay(b);
+  if (!da || !db || db < da) return 0;
+  let n = 0;
+  const cur = new Date(da.getTime());
+  while (cur <= db) {
+    if (!isWeekend(cur)) n++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return n;
+}
+
+function taskWorkDays(task) {
+  if (!task || task.milestone) return 0;
+  const stored = Number(task.workDays);
+  if (stored > 0) return stored;
+  const start = planStart(task);
+  const end = planEnd(task);
+  if (!start || !end) return 0;
+  return workDaysBetween(start, end);
+}
+
+function applyWorkDuration(task) {
+  if (!task) return task;
+  if (task.milestone) {
+    task.workDays = 0;
+    if (task.plannedStart) {
+      task.plannedStart = nextWorkDay(task.plannedStart);
+      task.plannedEnd = task.plannedStart;
+    }
+    return task;
+  }
+  const n = Math.max(1, Number(task.workDays) || workDaysBetween(task.plannedStart, task.plannedEnd) || 1);
+  task.workDays = n;
+  if (task.plannedStart) {
+    task.plannedStart = nextWorkDay(task.plannedStart);
+    task.plannedEnd = addWorkDaysIso(task.plannedStart, n - 1);
+  } else if (task.plannedEnd) {
+    task.plannedEnd = nextWorkDay(task.plannedEnd);
+    task.plannedStart = addWorkDaysIso(task.plannedEnd, -(n - 1));
+  }
+  return task;
+}
+
 function planStart(task) {
   return (task && (task.plannedStart || task.baseStart)) || "";
 }
@@ -563,10 +640,7 @@ function addDaysIso(value, n) {
 
 function taskSpanDays(task) {
   if (task.milestone) return 0;
-  const start = planStart(task);
-  const end = planEnd(task);
-  if (!start || !end) return 0;
-  return daysBetween(start, end);
+  return Math.max(0, taskWorkDays(task) - 1);
 }
 
 function migrateTask(task) {
@@ -575,6 +649,9 @@ function migrateTask(task) {
   if (!Array.isArray(task.preds)) task.preds = [];
   if (task.milestone == null) task.milestone = false;
   if (task.autoSchedule == null) task.autoSchedule = false;
+  if (task.workDays == null || task.workDays === "") {
+    task.workDays = task.milestone ? 0 : workDaysBetween(planStart(task), planEnd(task)) || 0;
+  }
   if (task.percent == null) {
     task.percent = task.status === "done" ? 100 : task.status === "in_progress" ? 50 : 0;
   }
@@ -601,8 +678,9 @@ function applyDependencies(project) {
   for (let n = 0; n < 30; n++) {
     let moved = false;
     list.forEach((t) => {
-      if (hasChildren(t) || !t.plannedStart || !t.autoSchedule) return;
-      const span = taskSpanDays(t);
+      if (hasChildren(t) || !t.autoSchedule) return;
+      const dur = t.milestone ? 0 : Math.max(1, Number(t.workDays) || workDaysBetween(t.plannedStart, t.plannedEnd) || 1);
+      if (!t.milestone) t.workDays = dur;
       (t.preds || []).forEach((link) => {
         const pred = byId[link.id];
         if (!pred || !pred.plannedStart) return;
@@ -612,27 +690,30 @@ function applyDependencies(project) {
         const predEnd = pred.plannedEnd || pred.plannedStart;
         let needStart = t.plannedStart;
         let needEnd = t.plannedEnd || t.plannedStart;
-        if (type === "FS") needStart = addDaysIso(predEnd, 1 + lag);
-        if (type === "SS") needStart = addDaysIso(predStart, lag);
+        if (type === "FS") needStart = addWorkDaysIso(predEnd, 1 + lag);
+        if (type === "SS") needStart = addWorkDaysIso(predStart, lag);
         if (type === "FF") {
-          needEnd = addDaysIso(predEnd, lag);
-          needStart = addDaysIso(needEnd, t.milestone ? 0 : -span);
+          needEnd = addWorkDaysIso(predEnd, lag);
+          needStart = t.milestone ? needEnd : addWorkDaysIso(needEnd, -(dur - 1));
         }
         if (type === "SF") {
-          needEnd = addDaysIso(predStart, lag);
-          needStart = addDaysIso(needEnd, t.milestone ? 0 : -span);
+          needEnd = addWorkDaysIso(predStart, lag);
+          needStart = t.milestone ? needEnd : addWorkDaysIso(needEnd, -(dur - 1));
         }
-        if (parseDay(needStart) && parseDay(t.plannedStart) && parseDay(needStart) > parseDay(t.plannedStart)) {
-          t.plannedStart = needStart;
-          t.plannedEnd = t.milestone ? needStart : addDaysIso(needStart, span);
+        const currentStart = parseDay(t.plannedStart);
+        const nextStart = parseDay(needStart);
+        if (nextStart && (!currentStart || nextStart > currentStart)) {
+          t.plannedStart = nextWorkDay(needStart);
+          t.plannedEnd = t.milestone ? t.plannedStart : addWorkDaysIso(t.plannedStart, dur - 1);
           moved = true;
         } else if ((type === "FF" || type === "SF") && parseDay(needEnd) && parseDay(t.plannedEnd || t.plannedStart) && parseDay(needEnd) > parseDay(t.plannedEnd || t.plannedStart)) {
-          t.plannedEnd = needEnd;
-          t.plannedStart = t.milestone ? needEnd : addDaysIso(needEnd, -span);
+          t.plannedEnd = nextWorkDay(needEnd);
+          t.plannedStart = t.milestone ? t.plannedEnd : addWorkDaysIso(t.plannedEnd, -(dur - 1));
           moved = true;
         }
       });
       if (t.milestone) t.plannedEnd = t.plannedStart;
+      else if (t.plannedStart && dur) applyWorkDuration(t);
     });
     if (!moved) break;
   }
@@ -799,6 +880,7 @@ function makeTask(name, ps, pe, as, ae, pc, ac, status, children) {
     preds: [],
     milestone: false,
     autoSchedule: false,
+    workDays: 0,
     percent: 0
   };
 }
@@ -1588,6 +1670,7 @@ function projectView() {
               <thead><tr>
                 <th>#</th><th>${tr("taskName")}</th>${isPm() ? `<th>${tr("predecessors")}</th>` : ""}<th>${tr("status")}</th>
                 <th>${tr("percent")}</th>
+                <th>${tr("workDays")}</th>
                 <th>${tr("plannedStart")} / ${tr("plannedEnd")}</th>
                 <th>${tr("actualStart")} / ${tr("actualEnd")}</th>
                 <th>${tr("slack")}</th>
@@ -1679,6 +1762,7 @@ function taskRow(project, taskItem, parent, index, label, isSub, expanded, isLas
     ${isPm() ? `<td data-label="${esc(tr("predecessors"))}">${esc(predText(taskItem, project))}</td>` : ""}
     <td data-label="${esc(tr("status"))}"><span class="badge ${taskItem.status}">${tr(taskItem.status)}</span></td>
     <td data-label="${esc(tr("percent"))}">${Number(taskItem.percent || 0)}%</td>
+    <td data-label="${esc(tr("workDays"))}">${taskWorkDays(taskItem) || "—"}</td>
     <td data-label="${esc(tr("planned"))}">${fmtDate(planStart(taskItem))} → ${fmtDate(planEnd(taskItem))}</td>
     <td data-label="${esc(tr("actual"))}">${fmtDate(taskItem.actualStart)} → ${fmtDate(taskItem.actualEnd)}</td>
     <td data-label="${esc(tr("slack"))}">${taskItem.slack === "" || taskItem.slack == null ? "—" : taskItem.slack}</td>
@@ -1976,10 +2060,13 @@ function ganttHtml(project, opts) {
       if (cols && cols[i] && cols[i].gap) {
         return `<span class="gantt-day gantt-gap" title="${fmtDate(iso(d))}">${pad2(d.getDate())}</span>`;
       }
-      const weekend = d.getDay() === 0 || d.getDay() === 6 ? " weekend" : "";
+      const weekend = isWeekend(d) ? " weekend" : "";
       const monthStart = monthStarts.has(i) ? " month-start" : "";
       return `<span class="gantt-day${weekend}${monthStart}">${pad2(d.getDate())}</span>`;
     })
+    .join("");
+  const weekendMarks = days
+    .map((d, i) => (isWeekend(d) ? `<i class="gantt-weekend" style="left:${i * dayW}px;width:${dayW}px"></i>` : ""))
     .join("");
   const monthLines = [...monthStarts]
     .filter((i) => i > 0)
@@ -2035,7 +2122,7 @@ function ganttHtml(project, opts) {
           <div class="gantt-col gantt-dates-a">${dateRange(task.actualStart, task.actualEnd)}</div>`}
         </div>
         <div class="gantt-track" style="width:${scaleW}px">
-          ${monthLines}
+          ${weekendMarks}${monthLines}
           ${barHtml(task.baseStart, task.baseEnd, "baseline")}
           ${planBar}
           ${task.milestone ? diamondHtml(task.actualStart || task.actualEnd, "act") : barHtml(task.actualStart, task.actualEnd, "actual")}
@@ -2259,6 +2346,7 @@ function openTaskForm(project, taskItem, parent) {
     preds: [],
     milestone: false,
     autoSchedule: false,
+    workDays: 0,
     percent: 0
   };
   const disabled = rolled ? "disabled" : "";
@@ -2293,6 +2381,7 @@ function openTaskForm(project, taskItem, parent) {
     <div class="grid-2">
       <label>${tr("plannedStart")}${dateInput("plannedStart", tk.plannedStart || tk.baseStart, "")}</label>
       <label>${tr("plannedEnd")}${dateInput("plannedEnd", tk.plannedEnd || tk.baseEnd, "")}</label>
+      <label>${tr("workDays")}<input type="number" name="workDays" min="0" step="1" value="${taskWorkDays(tk) || ""}" ${rolled || tk.milestone ? "disabled" : ""}></label>
       <label>${tr("baseStart")}${dateInput("baseStart", tk.baseStart, "")}</label>
       <label>${tr("baseEnd")}${dateInput("baseEnd", tk.baseEnd, "")}</label>
       <label>${tr("actualStart")}${dateInput("actualStart", tk.actualStart, "")}</label>
@@ -2301,7 +2390,7 @@ function openTaskForm(project, taskItem, parent) {
       <label>${tr("actualCost")}<input type="number" name="actualCost" value="${tk.actualCost || 0}" ${disabled}></label>
       <label>${tr("percent")}<input type="number" name="percent" min="0" max="100" value="${Number(tk.percent || 0)}"></label>
     </div>
-    <p class="muted">${tr("dateHint")}: dd/mm/yyyy</p>
+    <p class="muted">${tr("dateHint")}: dd/mm/yyyy. ${tr("workDaysHint")}</p>
     <label>${tr("status")}<select name="status">
       <option value="not_started" ${(tk.status || "not_started") === "not_started" ? "selected" : ""}>${tr("not_started")}</option>
       <option value="in_progress" ${tk.status === "in_progress" ? "selected" : ""}>${tr("in_progress")}</option>
@@ -2340,7 +2429,19 @@ function openTaskForm(project, taskItem, parent) {
     if (!payload.plannedEnd) payload.plannedEnd = payload.baseEnd || payload.plannedStart || "";
     payload.status = fd.get("status") || tk.status || "not_started";
     payload.percent = Math.max(0, Math.min(100, Number(fd.get("percent") || 0)));
-    if (payload.milestone && payload.plannedStart) payload.plannedEnd = payload.plannedStart;
+    if (payload.milestone) {
+      payload.workDays = 0;
+      if (payload.plannedStart) payload.plannedEnd = payload.plannedStart;
+    } else if (!rolled) {
+      const rawDays = String(fd.get("workDays") || "").trim();
+      const entered = rawDays === "" ? NaN : Number(rawDays);
+      if (Number.isFinite(entered) && entered >= 0) {
+        payload.workDays = Math.max(entered === 0 ? 0 : entered, entered ? 1 : 0);
+        if (payload.workDays) applyWorkDuration(payload);
+      } else {
+        payload.workDays = workDaysBetween(payload.plannedStart, payload.plannedEnd) || 0;
+      }
+    }
     if (!rolled) {
       payload.plannedCost = Number(fd.get("plannedCost") || 0);
       payload.actualCost = Number(fd.get("actualCost") || 0);
