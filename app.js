@@ -35,9 +35,9 @@ const I18N = {
     other: "أخرى",
     status: "الحالة",
     plannedCost: "الكلفة المتوقعة",
-    actualCost: "الكلفة الحقيقية",
+    actualCost: "الكلفة الفعلية",
     plannedDays: "الأيام المتوقعة",
-    actualDays: "الأيام الحقيقية",
+    actualDays: "الأيام الفعلية",
     progress: "التقدم",
     open: "فتح",
     tasks: "المهام / المراحل",
@@ -50,8 +50,8 @@ const I18N = {
     taskName: "اسم المهمة",
     plannedStart: "بداية متوقعة",
     plannedEnd: "نهاية متوقعة",
-    actualStart: "بداية حقيقية",
-    actualEnd: "نهاية حقيقية",
+    actualStart: "بداية فعلية",
+    actualEnd: "نهاية فعلية",
     notes: "ملاحظات",
     save: "حفظ",
     cancel: "إلغاء",
@@ -65,11 +65,11 @@ const I18N = {
     baseline: "خط الأساس",
     setBaseline: "تحديث خط الأساس",
     baselineSaved: "تم التحديث: المتوقع الفارغ أصبح مثل خط الأساس، والمتوقع الموجود نُسخ إلى خط الأساس.",
-    baselineConfirm: "عند التحديث: إن كان المتوقع فارغاً يُملأ من خط الأساس. إن كان موجوداً يُنسخ إلى خط الأساس. التواريخ الحقيقية لا تُمسح.",
+    baselineConfirm: "عند التحديث: إن كان المتوقع فارغاً يُملأ من خط الأساس. إن كان موجوداً يُنسخ إلى خط الأساس. التواريخ الفعلية لا تُمسح.",
     baselineNoPlan: "لا توجد تواريخ متوقعة ولا خط أساس لهذه المهام.",
     resetDates: "إعادة ضبط التواريخ",
-    resetDatesConfirm: "سيتم استبدال التواريخ المتوقعة بخط الأساس، ومسح التواريخ الحقيقية. خط الأساس يبقى كما هو.",
-    resetDatesOk: "عُدّل الجدول المتوقع ليطابق خط الأساس، ومُسحت التواريخ الحقيقية.",
+    resetDatesConfirm: "سيتم استبدال التواريخ المتوقعة بخط الأساس، ومسح التواريخ الفعلية. خط الأساس يبقى كما هو.",
+    resetDatesOk: "عُدّل الجدول المتوقع ليطابق خط الأساس، ومُسحت التواريخ الفعلية.",
     milestone: "حدث هام",
     baseStart: "بداية خط الأساس",
     baseEnd: "نهاية خط الأساس",
@@ -95,6 +95,15 @@ const I18N = {
     timeReport: "تقرير الزمن",
     print: "طباعة التقرير",
     printSize: "حجم الطباعة",
+    printOrient: "اتجاه الصفحة",
+    printPortrait: "عمودي",
+    printLandscape: "أفقي",
+    refreshApp: "تحديث الموقع",
+    refreshWait: "جاري جلب الإصدار الجديد…",
+    refreshFail: "تعذر التحديث. تحقق من الاتصال ثم أعد المحاولة.",
+    mainTasks: "المهام الرئيسة",
+    subTasks: "المهام الفرعية",
+    doneCount: "منجز",
     printAuto: "عادي (حسب الصفحات)",
     printPages1: "صفحة واحدة",
     printPages2: "صفحتان",
@@ -293,6 +302,15 @@ const I18N = {
     timeReport: "Time report",
     print: "Print report",
     printSize: "Print size",
+    printOrient: "Page orientation",
+    printPortrait: "Portrait",
+    printLandscape: "Landscape",
+    refreshApp: "Refresh site",
+    refreshWait: "Loading the new version…",
+    refreshFail: "Could not refresh. Check the connection and try again.",
+    mainTasks: "Main tasks",
+    subTasks: "Subtasks",
+    doneCount: "Done",
     printAuto: "Normal (as many pages as needed)",
     printPages1: "One page",
     printPages2: "Two pages",
@@ -713,10 +731,15 @@ function leafTasks(task) {
   return task.children.flatMap(leafTasks);
 }
 
+function isTaskComplete(task) {
+  return task.status === "done" || Number(task.percent || 0) >= 100;
+}
+
 function projectStats(project) {
   rollupProject(project);
   const tops = project.tasks || [];
   const leaves = tops.flatMap(leafTasks);
+  const subs = tops.flatMap((t) => t.children || []);
   const plannedCost = tops.reduce((s, t) => s + Number(t.plannedCost || 0), 0);
   const actualCost = tops.reduce((s, t) => s + Number(t.actualCost || 0), 0);
   const plannedDays = daysBetween(
@@ -727,9 +750,33 @@ function projectStats(project) {
     minDate(tops.map((t) => t.actualStart)),
     maxDate(tops.map((t) => t.actualEnd))
   );
-  const done = leaves.filter((t) => t.status === "done").length;
+  const done = leaves.filter(isTaskComplete).length;
   const progress = leaves.length ? Math.round((done / leaves.length) * 100) : 0;
-  return { plannedCost, actualCost, plannedDays, actualDays, progress, count: leaves.length };
+  return {
+    plannedCost,
+    actualCost,
+    plannedDays,
+    actualDays,
+    progress,
+    count: leaves.length,
+    mainCount: tops.length,
+    mainDone: tops.filter(isTaskComplete).length,
+    subCount: subs.length,
+    subDone: subs.filter(isTaskComplete).length
+  };
+}
+
+function progressKpisHtml(s) {
+  return `<div class="kpis">
+      <div class="card kpi"><span class="muted">${tr("progress")}</span><b>${s.progress}%</b></div>
+      <div class="card kpi"><span class="muted">${tr("mainTasks")}</span><b>${s.mainCount}</b><span class="kpi-done">${tr("doneCount")}: ${s.mainDone}</span></div>
+      <div class="card kpi"><span class="muted">${tr("subTasks")}</span><b>${s.subCount}</b><span class="kpi-done">${tr("doneCount")}: ${s.subDone}</span></div>
+      <div class="card kpi"><span class="muted">${tr("taskCount")}</span><b>${s.count}</b></div>
+      <div class="card kpi"><span class="muted">${tr("plannedCost")}</span><b>${money(s.plannedCost)}</b></div>
+      <div class="card kpi"><span class="muted">${tr("actualCost")}</span><b>${money(s.actualCost)}</b></div>
+      <div class="card kpi"><span class="muted">${tr("plannedDays")}</span><b>${s.plannedDays} ${tr("days")}</b></div>
+      <div class="card kpi"><span class="muted">${tr("actualDays")}</span><b>${s.actualDays} ${tr("days")}</b></div>
+    </div>`;
 }
 
 function makeTask(name, ps, pe, as, ae, pc, ac, status, children) {
@@ -965,6 +1012,7 @@ const state = {
   reportShowSubs: true,
   reportShowGantt: true,
   printFit: "auto",
+  printOrient: localStorage.getItem(KEY + "-print-orient") || "portrait",
   modal: null,
   expanded: {},
   projectTab: "info",
@@ -1105,6 +1153,7 @@ function setTheme(id) {
 
 function render() {
   applyTheme();
+  applyPrintOrient();
   document.documentElement.lang = state.lang;
   document.documentElement.dir = state.lang === "ar" ? "rtl" : "ltr";
   document.title = tr("app");
@@ -1183,6 +1232,49 @@ function setLang() {
   render();
 }
 
+function printGanttWidth() {
+  return state.printOrient === "landscape" ? 980 : 670;
+}
+
+function applyPrintOrient() {
+  const orient = state.printOrient === "landscape" ? "landscape" : "portrait";
+  document.documentElement.setAttribute("data-print-orient", orient);
+  let tag = document.getElementById("print-page-css");
+  if (!tag) {
+    tag = document.createElement("style");
+    tag.id = "print-page-css";
+    document.head.appendChild(tag);
+  }
+  tag.textContent = `@page { size: A4 ${orient}; margin: 10mm; }`;
+}
+
+async function refreshApp() {
+  const stamp = String(Date.now());
+  try {
+    showToast(tr("refreshWait"));
+    let v = "";
+    try {
+      const ver = await fetch(`version.json?t=${stamp}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null));
+      if (ver && ver.v) v = String(ver.v);
+    } catch (err) {
+      /* fall back to index.html */
+    }
+    if (!v) {
+      const html = await fetch(`index.html?t=${stamp}`, { cache: "no-store" }).then((r) => r.text());
+      const found = html.match(/app\.js\?v=([^"'&\s]+)/);
+      v = found ? found[1] : stamp;
+    }
+    const next = new URL("index.html", location.href);
+    next.searchParams.set("v", v);
+    next.searchParams.set("t", stamp);
+    location.replace(next.href);
+  } catch (err) {
+    showToast(tr("refreshFail"), true);
+  }
+}
+
+}
+
 function loginView() {
   const box = el(`<div class="login-wrap">
     <form class="login-card">
@@ -1194,10 +1286,12 @@ function loginView() {
       <div class="row">
         <button class="btn" type="submit">${tr("enter")}</button>
         <button class="btn ghost" type="button" data-lang>${tr("lang")}</button>
+        <button class="btn secondary" type="button" data-refresh>${tr("refreshApp")}</button>
       </div>
     </form>
   </div>`);
   box.querySelector("[data-lang]").onclick = setLang;
+  box.querySelector("[data-refresh]").onclick = () => refreshApp();
   box.querySelector("form").onsubmit = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -1277,6 +1371,7 @@ function shellView(user) {
         <button class="side-link${tab === "files" ? " is-on" : ""}" type="button" data-ptab="files">${tr("tabFiles")}</button>
       </div>` : ""}
       <div class="side-foot">
+        <button class="side-link" type="button" data-refresh>${tr("refreshApp")}</button>
         <button class="side-link" type="button" data-lang>${tr("lang")}</button>
         <button class="side-link" type="button" data-out>${tr("logout")}</button>
       </div>
@@ -1300,6 +1395,7 @@ function shellView(user) {
     };
   });
   wrap.querySelector("[data-lang]").onclick = setLang;
+  wrap.querySelector("[data-refresh]").onclick = () => refreshApp();
   wrap.querySelector("[data-out]").onclick = () => {
     if (!confirm(tr("confirmLogout"))) return;
     flushSave().catch(() => {});
@@ -1439,14 +1535,7 @@ function projectView() {
     <div class="project-main">${
       tab === "overview" ? `<section class="project-panel is-on" data-panel="overview">
           <h3>${tr("overallProgress")}</h3>
-          <div class="kpis">
-            <div class="card kpi"><span class="muted">${tr("progress")}</span><b>${s.progress}%</b></div>
-            <div class="card kpi"><span class="muted">${tr("taskCount")}</span><b>${s.count}</b></div>
-            <div class="card kpi"><span class="muted">${tr("plannedCost")}</span><b>${money(s.plannedCost)}</b></div>
-            <div class="card kpi"><span class="muted">${tr("actualCost")}</span><b>${money(s.actualCost)}</b></div>
-            <div class="card kpi"><span class="muted">${tr("plannedDays")}</span><b>${s.plannedDays} ${tr("days")}</b></div>
-            <div class="card kpi"><span class="muted">${tr("actualDays")}</span><b>${s.actualDays} ${tr("days")}</b></div>
-          </div>
+          ${progressKpisHtml(s)}
         </section>` : tab === "info" ? `<section class="project-panel is-on" data-panel="info">
           <div class="row" style="justify-content:space-between">
             <h3>${tr("projectInfo")}</h3>
@@ -1490,7 +1579,7 @@ function projectView() {
           <div class="card table-scroll" style="padding:8px 16px">
             <table class="stack-table">
               <thead><tr>
-                <th>#</th><th>${tr("taskName")}</th><th>${tr("predecessors")}</th><th>${tr("status")}</th>
+                <th>#</th><th>${tr("taskName")}</th>${isPm() ? `<th>${tr("predecessors")}</th>` : ""}<th>${tr("status")}</th>
                 <th>${tr("percent")}</th>
                 <th>${tr("plannedStart")} / ${tr("plannedEnd")}</th>
                 <th>${tr("actualStart")} / ${tr("actualEnd")}</th>
@@ -1579,8 +1668,8 @@ function taskRow(project, taskItem, parent, index, label, isSub, expanded, isLas
   const crit = taskItem.critical ? " critical-task" : "";
   const row = el(`<tr class="${parent ? "child-row" : "parent-row"}${crit}">
     <td data-label="#"> ${label}</td>
-    <td data-label="${esc(tr("taskName"))}" class="${isSub ? "task-indent" : ""}"><span class="task-name-cell">${twist}<span>${esc(taskItem.name)}</span>${msMark}${count}</span></td>
-    <td data-label="${esc(tr("predecessors"))}">${esc(predText(taskItem, project))}</td>
+    <td data-label="${esc(tr("taskName"))}" class="${isSub ? "task-indent" : ""}"><span class="task-name-cell">${twist}<span class="task-title">${esc(taskItem.name)}${msMark}</span>${count}</span></td>
+    ${isPm() ? `<td data-label="${esc(tr("predecessors"))}">${esc(predText(taskItem, project))}</td>` : ""}
     <td data-label="${esc(tr("status"))}"><span class="badge ${taskItem.status}">${tr(taskItem.status)}</span></td>
     <td data-label="${esc(tr("percent"))}">${Number(taskItem.percent || 0)}%</td>
     <td data-label="${esc(tr("planned"))}">${fmtDate(planStart(taskItem))} → ${fmtDate(planEnd(taskItem))}</td>
@@ -1934,7 +2023,7 @@ function ganttHtml(project, opts) {
         : barHtml(planStart(task), planEnd(task), planCls, Number(task.percent || 0));
       return `<div class="gantt-row ${depth ? "sub" : ""} ${task.critical ? "is-critical" : ""}">
         <div class="gantt-sticky-name">
-          <div class="gantt-name">${twist}<span class="gantt-name-text">${esc(task.name)}</span>${msIcon}${count}</div>
+          <div class="gantt-name">${twist}<span class="gantt-name-text">${esc(task.name)}${msIcon}</span>${count}</div>
           ${hideDates ? "" : `<div class="gantt-col gantt-dates-p">${dateRange(planStart(task), planEnd(task))}</div>
           <div class="gantt-col gantt-dates-a">${dateRange(task.actualStart, task.actualEnd)}</div>`}
         </div>
@@ -2350,14 +2439,7 @@ function reportCoverHtml(project) {
       ${extra}
     </table>
     <h3>${tr("overallProgress")}</h3>
-    <div class="kpis">
-      <div class="card kpi"><span class="muted">${tr("progress")}</span><b>${s.progress}%</b></div>
-      <div class="card kpi"><span class="muted">${tr("taskCount")}</span><b>${s.count}</b></div>
-      <div class="card kpi"><span class="muted">${tr("plannedCost")}</span><b>${money(s.plannedCost)}</b></div>
-      <div class="card kpi"><span class="muted">${tr("actualCost")}</span><b>${money(s.actualCost)}</b></div>
-      <div class="card kpi"><span class="muted">${tr("plannedDays")}</span><b>${s.plannedDays} ${tr("days")}</b></div>
-      <div class="card kpi"><span class="muted">${tr("actualDays")}</span><b>${s.actualDays} ${tr("days")}</b></div>
-    </div>
+    ${progressKpisHtml(s)}
   </section>`;
 }
 
@@ -2451,6 +2533,7 @@ function reportTasksOnlyTable(project, showSubs) {
 }
 
 function printReport() {
+  applyPrintOrient();
   const pages = state.printFit;
   const root = document.documentElement;
   const reset = () => root.style.setProperty("--print-zoom", "1");
@@ -2497,6 +2580,12 @@ function reportsView() {
         </label>
         ${single ? `<label class="chk"><input type="checkbox" data-subs ${state.reportShowSubs ? "checked" : ""}> ${tr("showSubtasks")}</label>
         <label class="chk"><input type="checkbox" data-gantt ${state.reportShowGantt ? "checked" : ""}> ${tr("showGantt")}</label>` : ""}
+        <label style="margin:0">${tr("printOrient")}
+          <select data-printorient>
+            <option value="portrait">${tr("printPortrait")}</option>
+            <option value="landscape">${tr("printLandscape")}</option>
+          </select>
+        </label>
         <label style="margin:0">${tr("printSize")}
           <select data-printfit>
             <option value="auto">${tr("printAuto")}</option>
@@ -2521,7 +2610,7 @@ function reportsView() {
     </section>` : ""}
     ${single && state.reportShowGantt ? `<section class="report-gantt-page print-sheet print-only">
       <h3>${tr("gantt")}</h3>
-      <div class="card gantt-wrap report-gantt">${ganttHtml(list[0], { compact: true, width: 670 })}</div>
+      <div class="card gantt-wrap report-gantt">${ganttHtml(list[0], { compact: true, width: printGanttWidth() })}</div>
     </section>` : ""}
   </div>`);
   const sel = box.querySelector("select[name=which]");
@@ -2535,6 +2624,16 @@ function reportsView() {
   fit.onchange = () => {
     state.printFit = fit.value;
   };
+  const orient = box.querySelector("[data-printorient]");
+  if (orient) {
+    orient.value = state.printOrient === "landscape" ? "landscape" : "portrait";
+    orient.onchange = () => {
+      state.printOrient = orient.value === "landscape" ? "landscape" : "portrait";
+      localStorage.setItem(KEY + "-print-orient", state.printOrient);
+      applyPrintOrient();
+      render();
+    };
+  }
   const subs = box.querySelector("[data-subs]");
   if (subs) subs.onchange = () => {
     state.reportShowSubs = subs.checked;

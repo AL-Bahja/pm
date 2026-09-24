@@ -331,6 +331,7 @@ textarea { min-height: 80px; resize: vertical; }
 @media (max-width: 900px) { .kpis { grid-template-columns: 1fr 1fr; } }
 .kpi { padding: 16px; }
 .kpi b { font-size: 22px; display: block; }
+.kpi-done { display: block; margin-top: 4px; font-size: 13px; color: var(--muted); font-weight: 700; }
 
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
@@ -455,7 +456,8 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-  flex: 1;
+  flex: 0 1 auto;
+  max-width: calc(100% - 8px);
 }
 .gantt-scale { display: flex; flex-direction: column; flex-wrap: nowrap; }
 .gantt-years, .gantt-months, .gantt-days { display: flex; flex-wrap: nowrap; width: max-content; }
@@ -508,7 +510,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 }
 .ms-mark.critical { background: #b42318; }
 .ms-mark.act { background: var(--actual); top: 12px; width: 8px; height: 8px; }
-.ms-tag { color: var(--teal); font-size: 12px; }
+.ms-tag { color: var(--teal); font-size: 12px; margin-inline-start: 0.2em; display: inline; }
 .gantt-links {
   position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none; overflow: hidden;
 }
@@ -659,7 +661,8 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   .stack-table tr.empty-row td::before { display: none; }
   .save-toast { bottom: calc(16px + env(safe-area-inset-bottom)); width: max-content; max-width: calc(100% - 24px); text-align: center; }
 }
-.task-name-cell { display: inline-flex; align-items: center; gap: 8px; }
+.task-name-cell { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; justify-content: flex-start; }
+.task-title { display: inline; min-width: 0; }
 .twist {
   width: 18px; height: 18px; padding: 0;
   border: 1px solid var(--line); border-radius: 4px;
@@ -830,7 +833,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 [dir="rtl"] th, [dir="rtl"] td { text-align: right; }
 
 @media print {
-  @page { size: A4 portrait; margin: 10mm; }
+  @page { margin: 10mm; }
   html, body {
     overflow: visible !important;
     height: auto !important;
@@ -877,4 +880,6 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   .gantt-compact .gantt-dates-p,
   .gantt-compact .gantt-dates-a { display: none !important; }
   [dir="rtl"] .gantt { direction: ltr; unicode-bidi: isolate; }
+  html[data-print-orient="landscape"] .report-table { font-size: 10px; }
+  html[data-print-orient="landscape"] .kpis { grid-template-columns: repeat(4, 1fr); }
 }
