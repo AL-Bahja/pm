@@ -1128,7 +1128,7 @@ function render() {
 function passwordGateView(user) {
   const box = el(`<div class="login-wrap">
     <form class="login-card">
-      <div class="brand"><div class="logo">PM</div><div><h1>${tr("changePassword")}</h1><div class="muted">${esc(user.name)}</div></div></div>
+      <div class="brand"><div class="logo"><img src="logo.jpg" alt=""></div><div><h1>${tr("changePassword")}</h1><div class="muted">${esc(user.name)}</div></div></div>
       <p class="hint">${tr("mustChangePass")}</p>
       <label>${tr("newPassword")}<input name="password" type="password" minlength="8" required autocomplete="off"></label>
       <p class="error"></p>
@@ -1186,7 +1186,7 @@ function setLang() {
 function loginView() {
   const box = el(`<div class="login-wrap">
     <form class="login-card">
-      <div class="brand"><div class="logo">PM</div><div><h1>${tr("loginTitle")}</h1><div class="muted">${tr("app")}</div></div></div>
+      <div class="brand"><div class="logo"><img src="logo.jpg" alt=""></div><div><h1>${tr("loginTitle")}</h1><div class="muted">${tr("app")}</div></div></div>
       <p class="hint">${tr("loginHint")}</p>
       <label>${tr("username")}<input name="username" autocomplete="username" required></label>
       <label>${tr("password")}<input name="password" type="password" autocomplete="current-password" required></label>
@@ -1256,7 +1256,7 @@ function shellView(user) {
   const wrap = el(`<div class="app-frame">
     <aside class="app-side no-print">
       <div class="brand side-brand">
-        <div class="logo">PM</div>
+        <div class="logo"><img src="logo.jpg" alt="${esc(tr("app"))}"></div>
         <div>
           <strong>${tr("app")}</strong>
           <div class="muted">${esc(user.name)}</div>
