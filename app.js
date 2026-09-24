@@ -2375,6 +2375,38 @@ function reportTable(projects, withTasks, showSubs) {
   return `<table class="report-table">${head}<tbody>${body}</tbody></table>`;
 }
 
+function reportTasksOnlyTable(project, showSubs) {
+  const rows = flatRows(project.tasks)
+    .filter(({ depth }) => showSubs || depth === 0)
+    .map(({ task, depth, parent }) => {
+      const kids = parent ? parent.children || [] : [];
+      const last = depth && kids[kids.length - 1] === task;
+      const mark = depth ? (last ? "└ " : "├ ") : "";
+      return `<tr class="${depth ? "report-sub" : "report-main"}">
+        <td class="${depth ? "task-indent" : ""}">${mark}${esc(task.name)}</td>
+        <td>${money(task.plannedCost)}</td>
+        <td>${money(task.actualCost)}</td>
+        <td>${fmtDate(planStart(task))}</td>
+        <td>${fmtDate(planEnd(task))}</td>
+        <td>${fmtDate(task.actualStart)}</td>
+        <td>${fmtDate(task.actualEnd)}</td>
+        <td>${tr(task.status)}</td>
+        <td>${Number(task.percent || 0)}%</td>
+      </tr>`;
+    })
+    .join("");
+  return `<table class="report-table">
+    <thead><tr>
+      <th>${tr("taskName")}</th>
+      <th>${tr("plannedCost")}</th><th>${tr("actualCost")}</th>
+      <th>${tr("plannedStart")}</th><th>${tr("plannedEnd")}</th>
+      <th>${tr("actualStart")}</th><th>${tr("actualEnd")}</th>
+      <th>${tr("status")}</th><th>${tr("percent")}</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
 function printReport() {
   const pages = state.printFit;
   const root = document.documentElement;
@@ -2434,13 +2466,16 @@ function reportsView() {
         <button class="btn" type="button" data-print>${tr("print")}</button>
       </div>
     </div>
-    ${single ? reportCoverHtml(list[0]) : `<h1 class="report-title">${tr("allProjects")}</h1>`}
-    <section class="report-tasks-page print-sheet">
-      ${single ? `<h3>${tr("reportTasksPage")}</h3>` : ""}
+    ${single ? reportCoverHtml(list[0]) : `<h1 class="report-title">${tr("allProjects")}</h1>
+    <div class="card table-scroll report-table-wrap" style="padding:8px 16px; margin-top:16px">
+      ${reportTable(list, false, false)}
+    </div>`}
+    ${single ? `<section class="report-tasks-page print-sheet print-only">
+      <h3>${tr("reportTasksPage")}</h3>
       <div class="card table-scroll report-table-wrap" style="padding:8px 16px; margin-top:16px">
-        ${reportTable(list, !!single, state.reportShowSubs)}
+        ${reportTasksOnlyTable(list[0], state.reportShowSubs)}
       </div>
-    </section>
+    </section>` : ""}
     ${single ? `<section class="report-gantt-page print-sheet">
       <h3>${tr("gantt")}</h3>
       <div class="card gantt-wrap report-gantt">${ganttHtml(list[0], { compact: true, width: 670 })}</div>
