@@ -61,10 +61,13 @@ const I18N = {
     baseline: "خط الأساس",
     setBaseline: "تحديث خط الأساس",
     baselineSaved: "تم تحديث خط الأساس من الجدول الحالي.",
+    resetDates: "إعادة ضبط التواريخ",
+    resetDatesConfirm: "سيتم مسح التواريخ المتوقعة والحقيقية لكل المهام. خط الأساس يبقى كما هو.",
+    resetDatesOk: "تم مسح التواريخ المتوقعة والحقيقية. خط الأساس لم يُغيَّر.",
     milestone: "حدث هام",
     baseStart: "بداية خط الأساس",
     baseEnd: "نهاية خط الأساس",
-    baselineHint: "عدّل تواريخ خط الأساس من داخل المهمة، أو اضغط «تحديث خط الأساس» لنسخ الجدول الحالي دفعة واحدة.",
+    baselineHint: "عدّل تواريخ خط الأساس من داخل المهمة، أو اضغط «تحديث خط الأساس» لنسخ الجدول الحالي. «إعادة ضبط التواريخ» تمسح المتوقع والحقيقي وتبقي خط الأساس.",
     predecessors: "الاعتماديات (Predecessors)",
     predType: "النوع",
     lag: "التأخير/التقديم (أيام)",
@@ -234,10 +237,13 @@ const I18N = {
     baseline: "Baseline",
     setBaseline: "Update baseline",
     baselineSaved: "Baseline updated from the current plan.",
+    resetDates: "Reset dates",
+    resetDatesConfirm: "This clears planned and actual dates on every task. Baseline dates stay as they are.",
+    resetDatesOk: "Planned and actual dates were cleared. Baseline was not changed.",
     milestone: "Key event",
     baseStart: "Baseline start",
     baseEnd: "Baseline end",
-    baselineHint: "Edit baseline dates inside the task, or tap Update baseline to copy the current plan.",
+    baselineHint: "Edit baseline dates inside the task, or tap Update baseline to copy the current plan. Reset dates clears planned and actual dates and keeps the baseline.",
     predecessors: "Predecessors",
     predType: "Type",
     lag: "Lag / lead (days)",
@@ -578,6 +584,15 @@ function setProjectBaseline(project) {
   flattenTasks(project).forEach((t) => {
     t.baseStart = t.plannedStart || "";
     t.baseEnd = t.plannedEnd || "";
+  });
+}
+
+function resetDatesKeepBaseline(project) {
+  flattenTasks(project).forEach((t) => {
+    t.plannedStart = "";
+    t.plannedEnd = "";
+    t.actualStart = "";
+    t.actualEnd = "";
   });
 }
 
@@ -1279,6 +1294,7 @@ function projectView() {
         <button class="btn secondary" data-files>${tr("projectFiles")}${((project.docFiles || []).length + (project.costFiles || []).length) ? ` (${(project.docFiles || []).length + (project.costFiles || []).length})` : ""}</button>
         <button class="btn secondary" data-rep>${tr("projectReport")}</button>
         ${isPm() ? `<button class="btn secondary" data-base>${tr("setBaseline")}</button>
+        <button class="btn secondary" data-reset-dates>${tr("resetDates")}</button>
         <button class="btn secondary" data-copy>${tr("copyProject")}</button>
         <button class="btn danger" data-delp>${tr("delete")}</button>` : ""}
       </div>
@@ -1342,6 +1358,14 @@ function projectView() {
     setProjectBaseline(project);
     save(state.data, true);
     alert(tr("baselineSaved"));
+    render();
+  };
+  const resetDatesBtn = box.querySelector("[data-reset-dates]");
+  if (resetDatesBtn) resetDatesBtn.onclick = () => {
+    if (!confirm(tr("resetDatesConfirm"))) return;
+    resetDatesKeepBaseline(project);
+    save(state.data, true);
+    alert(tr("resetDatesOk"));
     render();
   };
   box.querySelector("[data-rep]").onclick = () => {
