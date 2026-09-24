@@ -542,6 +542,28 @@ function applyWorkDuration(task) {
   return task;
 }
 
+function actualBarStart(task) {
+  return task.actualStart || (Number(task.percent || 0) > 0 || task.status === "in_progress" ? planStart(task) : "") || "";
+}
+
+function actualBarEnd(task) {
+  if (task.actualEnd) return task.actualEnd;
+  const start = actualBarStart(task);
+  const pct = Number(task.percent || 0);
+  const p0 = planStart(task);
+  const p1 = planEnd(task);
+  if (pct > 0 && start && p0 && p1) {
+    const dur = Math.max(1, Number(task.workDays) || workDaysBetween(p0, p1) || 1);
+    const done = Math.max(1, Math.round((dur * Math.min(100, pct)) / 100));
+    return addWorkDaysIso(nextWorkDay(start), done - 1);
+  }
+  if (start && (task.status === "in_progress" || pct > 0)) {
+    const today = iso(new Date());
+    return today < start ? start : today;
+  }
+  return start;
+}
+
 function planStart(task) {
   return (task && (task.plannedStart || task.baseStart)) || "";
 }
@@ -1237,12 +1259,50 @@ function setTheme(id) {
   render();
 }
 
+function viewScrollKey() {
+  return [state.view, state.projectId || "", state.projectTab || ""].join("|");
+}
+
+function captureViewScroll() {
+  const content = document.querySelector(".app-content");
+  const gantt = document.querySelector(".gantt-scroll");
+  return {
+    key: viewScrollKey(),
+    contentTop: content ? content.scrollTop : 0,
+    contentLeft: content ? content.scrollLeft : 0,
+    tables: [...document.querySelectorAll(".table-scroll")].map((el) => ({ top: el.scrollTop, left: el.scrollLeft })),
+    ganttLeft: gantt ? gantt.scrollLeft : 0,
+    ganttTop: gantt ? gantt.scrollTop : 0
+  };
+}
+
+function restoreViewScroll(saved) {
+  if (!saved || saved.key !== viewScrollKey()) return;
+  const content = document.querySelector(".app-content");
+  if (content) {
+    content.scrollTop = saved.contentTop;
+    content.scrollLeft = saved.contentLeft;
+  }
+  [...document.querySelectorAll(".table-scroll")].forEach((el, i) => {
+    const pos = saved.tables[i];
+    if (!pos) return;
+    el.scrollTop = pos.top;
+    el.scrollLeft = pos.left;
+  });
+  const gantt = document.querySelector(".gantt-scroll");
+  if (gantt) {
+    gantt.scrollLeft = saved.ganttLeft;
+    gantt.scrollTop = saved.ganttTop;
+  }
+}
+
 function render() {
   applyTheme();
   applyPrintOrient();
   document.documentElement.lang = state.lang;
   document.documentElement.dir = state.lang === "ar" ? "rtl" : "ltr";
   document.title = tr("app");
+  const savedScroll = captureViewScroll();
   const root = document.getElementById("app");
   const user = currentUser();
   if (!user) {
@@ -1258,6 +1318,7 @@ function render() {
     return;
   }
   root.replaceChildren(shellView(user));
+  requestAnimationFrame(() => restoreViewScroll(savedScroll));
 }
 
 function passwordGateView(user) {
@@ -2125,7 +2186,7 @@ function ganttHtml(project, opts) {
           ${weekendMarks}${monthLines}
           ${barHtml(task.baseStart, task.baseEnd, "baseline")}
           ${planBar}
-          ${task.milestone ? diamondHtml(task.actualStart || task.actualEnd, "act") : barHtml(task.actualStart, task.actualEnd, "actual")}
+          ${task.milestone ? diamondHtml(task.actualStart || task.actualEnd, "act") : barHtml(actualBarStart(task), actualBarEnd(task), "actual")}
         </div>
       </div>`;
     })
