@@ -709,26 +709,44 @@ function applyWorkDuration(task) {
   return task;
 }
 
+function todayIso() {
+  return iso(new Date());
+}
+
+function isTaskActive(task) {
+  if (!task) return false;
+  if (isTaskComplete(task)) return false;
+  return task.status === "in_progress" || task.status === "delayed" || Number(task.percent || 0) > 0 || !!task.actualStart;
+}
+
 function actualBarStart(task) {
-  return task.actualStart || (Number(task.percent || 0) > 0 || task.status === "in_progress" ? planStart(task) : "") || "";
+  return task.actualStart || (isTaskActive(task) || task.status === "in_progress" ? planStart(task) : "") || "";
 }
 
 function actualBarEnd(task) {
   if (task.actualEnd) return task.actualEnd;
+  if (isTaskComplete(task)) return task.actualEnd || planEnd(task) || todayIso();
   const start = actualBarStart(task);
-  const pct = Number(task.percent || 0);
-  const p0 = planStart(task);
-  const p1 = planEnd(task);
-  if (pct > 0 && start && p0 && p1) {
-    const dur = Math.max(1, Number(task.workDays) || workDaysBetween(p0, p1) || 1);
-    const done = Math.max(1, Math.round((dur * Math.min(100, pct)) / 100));
-    return addWorkDaysIso(nextWorkDay(start), done - 1);
-  }
-  if (start && (task.status === "in_progress" || pct > 0)) {
-    const today = iso(new Date());
+  if (!start) return "";
+  if (isTaskActive(task) || task.status === "in_progress") {
+    const today = todayIso();
     return today < start ? start : today;
   }
   return start;
+}
+
+function ganttFillPct(task) {
+  if (isTaskComplete(task)) return 100;
+  if (!isTaskActive(task) && task.status !== "in_progress") return 0;
+  const start = planStart(task);
+  const end = planEnd(task);
+  const today = todayIso();
+  if (!start || !end) return Number(task.percent || 0);
+  if (today <= start) return 0;
+  if (today >= end) return 100;
+  const total = Math.max(1, workDaysBetween(start, end));
+  const done = workDaysBetween(start, today);
+  return Math.max(1, Math.min(100, Math.round((100 * done) / total)));
 }
 
 function planStart(task) {
@@ -2429,6 +2447,8 @@ function ganttHtml(project, opts) {
     if (!a) return null;
     return Math.round((a - min) / 86400000);
   })());
+  const todayI = idxOf(todayIso());
+  const todayMark = todayI == null ? "" : `<i class="gantt-today" style="left:${todayI * dayW}px;width:${dayW}px"></i>`;
   const xOf = (isoDate, edge) => {
     const i = idxOf(isoDate);
     if (i == null) return null;
@@ -2464,7 +2484,7 @@ function ganttHtml(project, opts) {
       const planCls = `planned${task.critical ? " critical" : ""}${kids ? " summary" : ""}`;
       const planBar = task.milestone
         ? diamondHtml(planStart(task) || planEnd(task), `plan${task.critical ? " critical" : ""}`)
-        : barHtml(planStart(task), planEnd(task), planCls, Number(task.percent || 0));
+        : barHtml(planStart(task), planEnd(task), planCls, ganttFillPct(task));
       const actBar = task.milestone
         ? diamondHtml(task.actualStart || task.actualEnd, "act")
         : barHtml(actualBarStart(task), actualBarEnd(task), "actual");
@@ -2475,7 +2495,7 @@ function ganttHtml(project, opts) {
           ${showActCol ? `<div class="gantt-col gantt-dates-a">${dateRangeHtml(task.actualStart, task.actualEnd, compact)}</div>` : ""}
         </div>
         <div class="gantt-track" style="width:${scaleW}px">
-          ${weekendMarks}${monthLines}
+          ${weekendMarks}${monthLines}${todayMark}
           ${barHtml(task.baseStart, task.baseEnd, "baseline")}
           ${planBar}
           ${actBar}

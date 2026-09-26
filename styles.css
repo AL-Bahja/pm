@@ -676,6 +676,14 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   z-index: 0;
   pointer-events: none;
 }
+.gantt-today {
+  position: absolute; top: 0; bottom: 0;
+  background: rgba(180, 35, 24, 0.1);
+  border-inline-start: 2px solid #b42318;
+  z-index: 1;
+  pointer-events: none;
+  box-sizing: border-box;
+}
 .gantt-track {
   position: relative;
   height: var(--row-h);
