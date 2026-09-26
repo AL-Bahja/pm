@@ -218,6 +218,7 @@ const I18N = {
     sendPdf: "إرسال PDF",
     sendPdfTo: "إرسال إلى",
     sendPdfAll: "تحديد الكل",
+    sendPdfPick: "اختر مستلماً",
     sendPdfOk: "تم إرسال التقرير كملف PDF.",
     sendPdfFail: "تعذر إرسال التقرير.",
     remainingDays: "الأيام المتبقية",
@@ -459,6 +460,7 @@ const I18N = {
     sendPdf: "Send PDF",
     sendPdfTo: "Send to",
     sendPdfAll: "Select all",
+    sendPdfPick: "Choose a recipient",
     sendPdfOk: "The report PDF was sent.",
     sendPdfFail: "Could not send the report.",
     remainingDays: "Remaining days",
@@ -1346,6 +1348,7 @@ const state = {
   reportProjectId: "all",
   reportShowSubs: true,
   reportShowGantt: true,
+  reportMailTo: [],
   printFit: "auto",
   printOrient: localStorage.getItem(KEY + "-print-orient") || "portrait",
   modal: null,
@@ -1611,7 +1614,7 @@ function setLang() {
 }
 
 function printGanttWidth() {
-  return state.printOrient === "landscape" ? 980 : 670;
+  return state.printOrient === "landscape" ? 1100 : 760;
 }
 
 function applyPrintOrient() {
@@ -2287,7 +2290,7 @@ function keyGanttDates(project) {
 function fitGanttCols(project, innerWidth) {
   const keys = keyGanttDates(project);
   if (!keys.length) return [];
-  const minDayW = 6;
+  const minDayW = 10;
   const maxCols = Math.max(keys.length, Math.floor(Math.max(innerWidth, 180) / minDayW));
   const all = enumerateDays(keys[0], keys[keys.length - 1]);
   const keyMs = new Set(keys.map((d) => d.getTime()));
@@ -2370,7 +2373,7 @@ function ganttHtml(project, opts) {
   const max = cols ? cols[cols.length - 1].date : new Date(Math.max(...dates));
   const days = cols ? cols.map((c) => c.date) : enumerateDays(min, max);
   const colCount = Math.max(days.length, 1);
-  const dayW = compact ? Math.max(6, Math.floor(inner / colCount)) : mobile ? 14 : 16;
+  const dayW = compact ? Math.max(10, Math.floor(inner / colCount)) : mobile ? 14 : 16;
   const rowH = mobile ? 28 : 24;
   const headH = 48;
   const scaleW = colCount * dayW;
@@ -2391,7 +2394,7 @@ function ganttHtml(project, opts) {
     .join("");
   const dayBand = days
     .map((d, i) => {
-      const dayLabel = dayW >= 14 ? pad2(d.getDate()) : "";
+      const dayLabel = pad2(d.getDate());
       if (cols && cols[i] && cols[i].gap) {
         return `<span class="gantt-day gantt-gap" dir="ltr" title="${fmtDate(iso(d))}">${dayLabel}</span>`;
       }
@@ -3268,6 +3271,11 @@ function canvasToPdfBlob(canvas, landscape) {
     orientation: landscape ? "landscape" : "portrait",
     compress: true
   });
+  appendCanvasToPdf(pdf, canvas);
+  return pdf.output("blob");
+}
+
+function appendCanvasToPdf(pdf, canvas) {
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
   const imgW = pageW;
@@ -3275,15 +3283,15 @@ function canvasToPdfBlob(canvas, landscape) {
   const img = canvas.toDataURL("image/jpeg", 0.92);
   let heightLeft = imgH;
   let y = 0;
-  pdf.addImage(img, "JPEG", 0, y, imgW, imgH);
-  heightLeft -= pageH;
-  while (heightLeft > 1) {
-    y -= pageH;
-    pdf.addPage();
+  let slice = 0;
+  while (true) {
+    if (slice > 0) pdf.addPage();
     pdf.addImage(img, "JPEG", 0, y, imgW, imgH);
     heightLeft -= pageH;
+    y -= pageH;
+    slice += 1;
+    if (heightLeft <= 1) break;
   }
-  return pdf.output("blob");
 }
 
 function captureNodeCanvas(node) {
@@ -3322,15 +3330,27 @@ function captureNodeCanvas(node) {
 function captureReportPdfBlob() {
   const page = document.querySelector(".report-page");
   if (!page) return Promise.reject(new Error("pdf"));
+  const sheets = [...page.querySelectorAll(".print-sheet")];
+  if (!sheets.length) return Promise.reject(new Error("pdf"));
   const gantt = page.querySelector(".report-gantt");
   const landscape = state.printOrient === "landscape";
   return loadPdfLibs().then(() => {
     const saved = unlockForCapture();
+    const JsPDF = jsPdfCtor();
+    const pdf = new JsPDF({
+      unit: "mm",
+      format: "a4",
+      orientation: landscape ? "landscape" : "portrait",
+      compress: true
+    });
     return new Promise((resolve) => setTimeout(resolve, 300))
-      .then(() => captureNodeCanvas(page))
-      .then((canvas) => {
+      .then(() => sheets.reduce((chain, sheet, i) => chain.then(() => captureNodeCanvas(sheet).then((canvas) => {
         if (!canvas.width || !canvas.height) throw new Error("pdf");
-        const pdfBlob = canvasToPdfBlob(canvas, landscape);
+        if (i > 0) pdf.addPage();
+        appendCanvasToPdf(pdf, canvas);
+      })), Promise.resolve()))
+      .then(() => {
+        const pdfBlob = pdf.output("blob");
         if (!pdfBlob || pdfBlob.size < 4000) throw new Error("pdf");
         if (!gantt) return { pdfBlob, ganttBlob: null };
         return captureNodeCanvas(gantt)
@@ -3479,11 +3499,14 @@ function reportsView() {
           </select>
         </label>
         ${single && usersWithEmail().length ? `<div class="send-mail-box">
-          <div class="send-mail-title">${tr("sendPdfTo")}</div>
+          <label class="report-field">${tr("sendPdfTo")}
+            <select data-mail-pick>
+              <option value="">${tr("sendPdfPick")}</option>
+              ${usersWithEmail().map((u) => `<option value="${esc(u.email)}">${esc(userDisplayName(u))} — ${esc(u.email)}</option>`).join("")}
+            </select>
+          </label>
           <label class="chk"><input type="checkbox" data-mail-all> ${tr("sendPdfAll")}</label>
-          <div class="send-mail-list">
-            ${usersWithEmail().map((u) => `<label class="chk"><input type="checkbox" data-mail-user value="${esc(u.email)}"> ${esc(userDisplayName(u))} <span class="muted">${esc(u.email)}</span></label>`).join("")}
-          </div>
+          <div class="send-mail-picked" data-mail-picked></div>
           <button class="btn secondary" type="button" data-sendpdf>${tr("sendPdf")}</button>
         </div>` : ""}
         <button class="btn" type="button" data-print>${tr("print")}</button>
@@ -3493,15 +3516,15 @@ function reportsView() {
     <div class="card table-scroll report-table-wrap" style="padding:8px 16px; margin-top:16px">
       ${reportTable(list, false, false)}
     </div>`}
+    ${single && state.reportShowGantt ? `<section class="report-gantt-page print-sheet">
+      <h3>${tr("gantt")}</h3>
+      <div class="card gantt-wrap report-gantt">${ganttHtml(list[0], { compact: true, width: printGanttWidth() })}</div>
+    </section>` : ""}
     ${single ? `<section class="report-tasks-page print-sheet">
       <h3>${tr("reportTasksPage")}</h3>
       <div class="card table-scroll report-table-wrap" style="padding:8px 16px; margin-top:16px">
         ${reportTasksOnlyTable(list[0], state.reportShowSubs)}
       </div>
-    </section>` : ""}
-    ${single && state.reportShowGantt ? `<section class="report-gantt-page print-sheet">
-      <h3>${tr("gantt")}</h3>
-      <div class="card gantt-wrap report-gantt">${ganttHtml(list[0], { compact: true, width: printGanttWidth() })}</div>
     </section>` : ""}
   </div>`);
   const sel = box.querySelector("select[name=which]");
@@ -3538,18 +3561,49 @@ function reportsView() {
   box.querySelector("[data-print]").onclick = () => printReport();
   const sendPdf = box.querySelector("[data-sendpdf]");
   if (sendPdf) {
+    const pick = box.querySelector("[data-mail-pick]");
     const allChk = box.querySelector("[data-mail-all]");
-    const userChks = [...box.querySelectorAll("[data-mail-user]")];
-    const syncAll = () => {
-      if (allChk) allChk.checked = userChks.length > 0 && userChks.every((c) => c.checked);
+    const pickedEl = box.querySelector("[data-mail-picked]");
+    const users = usersWithEmail();
+    const valid = new Set(users.map((u) => String(u.email || "").trim()));
+    if (!Array.isArray(state.reportMailTo)) state.reportMailTo = [];
+    state.reportMailTo = state.reportMailTo.filter((e) => valid.has(e));
+    const paintPicked = () => {
+      const byEmail = {};
+      users.forEach((u) => { byEmail[String(u.email || "").trim()] = u; });
+      pickedEl.innerHTML = state.reportMailTo.map((email) => {
+        const u = byEmail[email];
+        const label = u ? userDisplayName(u) : email;
+        return `<span class="mail-chip">${esc(label)}<button type="button" data-mail-remove="${esc(email)}">×</button></span>`;
+      }).join("");
+      if (allChk) allChk.checked = users.length > 0 && state.reportMailTo.length === users.length;
+      pickedEl.querySelectorAll("[data-mail-remove]").forEach((btn) => {
+        btn.onclick = () => {
+          const email = btn.getAttribute("data-mail-remove");
+          state.reportMailTo = state.reportMailTo.filter((e) => e !== email);
+          paintPicked();
+        };
+      });
     };
-    if (allChk) {
-      allChk.onchange = () => userChks.forEach((c) => { c.checked = allChk.checked; });
+    if (pick) {
+      pick.onchange = () => {
+        const email = String(pick.value || "").trim();
+        pick.value = "";
+        if (!email || state.reportMailTo.indexOf(email) >= 0) return;
+        state.reportMailTo = state.reportMailTo.concat(email);
+        paintPicked();
+      };
     }
-    userChks.forEach((c) => { c.onchange = syncAll; });
-    sendPdf.onclick = () => {
-      sendReportPdf(list[0], userChks.filter((c) => c.checked).map((c) => c.value));
-    };
+    if (allChk) {
+      allChk.onchange = () => {
+        state.reportMailTo = allChk.checked
+          ? users.map((u) => String(u.email || "").trim()).filter((e) => e.includes("@"))
+          : [];
+        paintPicked();
+      };
+    }
+    sendPdf.onclick = () => sendReportPdf(list[0], state.reportMailTo.slice());
+    paintPicked();
   }
   bindGanttOpts(box);
   bindGanttScroll(box);
