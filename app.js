@@ -594,6 +594,10 @@ function holidayHoverTitle(d) {
   return name ? `${date} — ${name}` : date;
 }
 
+function isHoliday(d) {
+  return !!holidayOnDay(d);
+}
+
 function isNonWorking(d) {
   return isWeekend(d) || isHoliday(d);
 }
