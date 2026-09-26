@@ -1141,6 +1141,23 @@ body.pdf-capture .gantt-name-text {
   max-width: none !important;
   word-break: break-word;
 }
+html.pdf-capture[dir="rtl"] .print-sheet,
+html.pdf-capture[dir="rtl"] .report-page,
+body.pdf-capture[dir="rtl"] .print-sheet,
+body.pdf-capture[dir="rtl"] .report-page {
+  padding-inline: 18px !important;
+  overflow: visible !important;
+  box-sizing: border-box;
+}
+html.pdf-capture[dir="rtl"] th,
+html.pdf-capture[dir="rtl"] td,
+body.pdf-capture[dir="rtl"] th,
+body.pdf-capture[dir="rtl"] td {
+  text-align: start;
+  line-height: 1.4;
+  overflow: visible !important;
+  padding-inline: 6px;
+}
 .error { color: var(--danger); min-height: 1.2em; }
 .print-only { display: none !important; }
 .readonly-note { background: #fff7ed; border: 1px solid #fed7aa; padding: 10px 12px; border-radius: 10px; }
@@ -1163,11 +1180,27 @@ body.pdf-capture .gantt-name-text {
   }
   .app-content { overflow: visible !important; height: auto; }
   html[dir="ltr"] { zoom: var(--print-zoom, 1); }
+  html[dir="rtl"] { zoom: var(--print-zoom, 1); }
   .app-side, .topbar, .no-print, .save-toast { display: none !important; }
   .page { padding: 0; max-width: 100%; overflow: visible !important; }
   .report-page, .print-sheet {
     max-width: 100%;
     box-sizing: border-box;
+  }
+  html[dir="rtl"] .report-page,
+  html[dir="rtl"] .print-sheet {
+    padding-inline: 8px;
+    overflow: visible !important;
+  }
+  html[dir="rtl"] .report-table th,
+  html[dir="rtl"] .report-table td,
+  html[dir="rtl"] .info-table th,
+  html[dir="rtl"] .info-table td {
+    text-align: start;
+    padding: 3px 7px;
+    line-height: 1.4;
+    overflow: visible;
+    word-break: break-word;
   }
   .card { box-shadow: none; overflow: visible !important; }
   .table-scroll { overflow: visible !important; }

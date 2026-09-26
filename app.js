@@ -3299,25 +3299,28 @@ function canvasToPdfBlob(canvas, landscape) {
 function appendCanvasToPdf(pdf, canvas, fitOne) {
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
+  const m = 5;
+  const boxW = pageW - m * 2;
+  const boxH = pageH - m * 2;
   const img = canvas.toDataURL("image/jpeg", 0.92);
-  let imgW = pageW;
+  let imgW = boxW;
   let imgH = (canvas.height * imgW) / canvas.width;
-  if (fitOne || imgH <= pageH + 0.8) {
-    if (imgH > pageH) {
-      imgH = pageH;
+  if (fitOne || imgH <= boxH + 0.8) {
+    if (imgH > boxH) {
+      imgH = boxH;
       imgW = (canvas.width * imgH) / canvas.height;
     }
-    pdf.addImage(img, "JPEG", 0, 0, imgW, imgH);
+    pdf.addImage(img, "JPEG", m, m, imgW, imgH);
     return;
   }
   let heightLeft = imgH;
-  let y = 0;
+  let y = m;
   let slice = 0;
   while (true) {
     if (slice > 0) pdf.addPage();
-    pdf.addImage(img, "JPEG", 0, y, imgW, imgH);
-    heightLeft -= pageH;
-    y -= pageH;
+    pdf.addImage(img, "JPEG", m, y, imgW, imgH);
+    heightLeft -= boxH;
+    y -= boxH;
     slice += 1;
     if (heightLeft <= 1) break;
   }
@@ -3325,32 +3328,45 @@ function appendCanvasToPdf(pdf, canvas, fitOne) {
 
 function captureNodeCanvas(node) {
   const sheetId = node.getAttribute("data-print-sheet") || "";
-  const w = Math.max(node.scrollWidth, node.offsetWidth, 800);
-  const h = Math.max(node.scrollHeight, node.offsetHeight, 200);
+  const rtl = document.documentElement.getAttribute("dir") === "rtl";
+  const pad = rtl ? 28 : 10;
+  const baseW = Math.max(node.scrollWidth, node.offsetWidth, node.clientWidth, 800);
+  const baseH = Math.max(node.scrollHeight, node.offsetHeight, 200);
   return window.html2canvas(node, {
-    scale: 1.6,
+    scale: 2,
     useCORS: true,
     allowTaint: true,
     backgroundColor: "#ffffff",
     logging: false,
+    letterRendering: false,
     scrollX: 0,
     scrollY: 0,
-    windowWidth: w,
-    windowHeight: h,
-    width: w,
-    height: h,
-    letterRendering: true,
+    x: -pad,
+    y: 0,
+    width: baseW + pad * 2,
+    height: baseH + 12,
+    windowWidth: baseW + pad * 2,
+    windowHeight: baseH + pad,
     onclone: (cloned) => {
       cloned.documentElement.classList.add("pdf-capture");
       cloned.body.classList.add("pdf-capture");
       cloned.documentElement.style.overflow = "visible";
       cloned.body.style.overflow = "visible";
       cloned.body.style.height = "auto";
+      cloned.body.style.margin = "0";
       cloned.querySelectorAll(".no-print").forEach((n) => n.remove());
       if (sheetId) {
         cloned.querySelectorAll("[data-print-sheet]").forEach((s) => {
           if (s.getAttribute("data-print-sheet") !== sheetId) s.remove();
         });
+      }
+      const sheet = sheetId ? cloned.querySelector(`[data-print-sheet="${sheetId}"]`) : null;
+      if (sheet) {
+        sheet.style.padding = rtl ? "10px 22px" : "8px 12px";
+        sheet.style.boxSizing = "border-box";
+        sheet.style.maxWidth = "none";
+        sheet.style.overflow = "visible";
+        sheet.style.width = "auto";
       }
       cloned.querySelectorAll(".gantt-col, .gantt-day, .gantt-band, .gantt-sticky-label, .gantt-date-text").forEach((n) => {
         n.style.fontFamily = "Arial, Tahoma, sans-serif";
@@ -3371,7 +3387,8 @@ function captureReportPdfBlob() {
   if (!sheets.length) return Promise.reject(new Error("pdf"));
   const gantt = page.querySelector(".report-gantt");
   const landscape = state.printOrient === "landscape";
-  return loadPdfLibs().then(() => {
+  const fontsReady = document.fonts && document.fonts.ready ? document.fonts.ready.catch(() => {}) : Promise.resolve();
+  return loadPdfLibs().then(() => fontsReady).then(() => {
     const saved = unlockForCapture();
     const JsPDF = jsPdfCtor();
     const pdf = new JsPDF({
@@ -3476,7 +3493,7 @@ function printReport() {
   const root = document.documentElement;
   const reset = () => root.style.setProperty("--print-zoom", "1");
   reset();
-  if (!pages || pages === "auto" || state.lang === "ar") {
+  if (!pages || pages === "auto") {
     window.print();
     return;
   }
