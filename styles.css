@@ -669,17 +669,19 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   white-space: nowrap;
 }
 .gantt-day.gantt-gap { background: #eef2f5; color: #94a3b8; letter-spacing: 1px; }
-.gantt-day.weekend { background: #e8ecf0; color: #8b97a3; }
+.gantt-day.weekend,
+.gantt-day.holiday { background: #e8ecf0; color: #8b97a3; }
 .gantt-weekend {
   position: absolute; top: 0; bottom: 0;
   background: #e8ecf0;
   z-index: 0;
   pointer-events: none;
 }
+.gantt-weekend.holiday { pointer-events: auto; }
 .gantt-today {
   position: absolute; top: 0; bottom: 0;
-  background: rgba(180, 35, 24, 0.1);
-  border-inline-start: 2px solid #b42318;
+  background: rgba(2, 132, 199, 0.12);
+  border-inline-start: 2px solid #0284c7;
   z-index: 1;
   pointer-events: none;
   box-sizing: border-box;
@@ -752,8 +754,8 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 .swatch.delayed { background: #ea580c; }
 .swatch.today {
   width: 10px;
-  background: rgba(180, 35, 24, 0.15);
-  border-inline-start: 2px solid #b42318;
+  background: rgba(2, 132, 199, 0.16);
+  border-inline-start: 2px solid #0284c7;
   border-radius: 0;
 }
 .swatch.weekend { background: #e8ecf0; border: 1px solid #c5d0d8; }
@@ -1031,8 +1033,6 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 .task-form .var-preview { display: flex; align-items: center; gap: 6px; margin: 0; padding-top: 18px; }
 .var-over { color: var(--danger); font-weight: 700; }
 .var-under { color: var(--ok); font-weight: 700; }
-.gantt-day.holiday,
-.gantt-weekend.holiday { background: #fde68a; }
 .modal-x {
   position: static;
   width: 36px;

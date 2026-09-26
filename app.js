@@ -572,10 +572,26 @@ function holidayIsoSet() {
   return set;
 }
 
-function isHoliday(d) {
+function holidayOnDay(d) {
   const dt = parseDay(d);
-  if (!dt) return false;
-  return holidayIsoSet().has(iso(dt));
+  if (!dt) return null;
+  const t = dt.getTime();
+  return (state.data.holidays || []).find((h) => {
+    const a = parseDay(h.date);
+    const b = parseDay(h.end || h.date) || a;
+    if (!a) return false;
+    const lo = Math.min(a.getTime(), b.getTime());
+    const hi = Math.max(a.getTime(), b.getTime());
+    return t >= lo && t <= hi;
+  }) || null;
+}
+
+function holidayHoverTitle(d) {
+  const date = fmtDate(iso(parseDay(d)));
+  const h = holidayOnDay(d);
+  if (!h) return date;
+  const name = state.lang === "ar" ? String(h.ar || h.en || "").trim() : String(h.en || h.ar || "").trim();
+  return name ? `${date} — ${name}` : date;
 }
 
 function isNonWorking(d) {
@@ -2487,17 +2503,24 @@ function ganttHtml(project, opts) {
   const dayBand = days
     .map((d, i) => {
       const dayLabel = pad2(d.getDate());
+      const dayIso = iso(d);
+      const dayTitle = isHoliday(d) ? holidayHoverTitle(d) : fmtDate(dayIso);
       if (cols && cols[i] && cols[i].gap) {
-        return `<span class="gantt-day gantt-gap" dir="ltr" title="${fmtDate(iso(d))}">${dayLabel}</span>`;
+        return `<span class="gantt-day gantt-gap" dir="ltr" title="${esc(dayTitle)}">${dayLabel}</span>`;
       }
       const weekend = showWeekends && isWeekend(d) ? " weekend" : "";
       const holiday = showWeekends && isHoliday(d) ? " holiday" : "";
       const monthStart = monthStarts.has(i) ? " month-start" : "";
-      return `<span class="gantt-day${weekend}${holiday}${monthStart}" dir="ltr" title="${fmtDate(iso(d))}">${dayLabel}</span>`;
+      return `<span class="gantt-day${weekend}${holiday}${monthStart}" dir="ltr" title="${esc(dayTitle)}">${dayLabel}</span>`;
     })
     .join("");
   const weekendMarks = showWeekends
-    ? days.map((d, i) => (isNonWorking(d) ? `<i class="gantt-weekend${isHoliday(d) ? " holiday" : ""}" style="left:${i * dayW}px;width:${dayW}px"></i>` : "")).join("")
+    ? days.map((d, i) => {
+        if (!isNonWorking(d)) return "";
+        const hol = isHoliday(d);
+        const title = hol ? ` title="${esc(holidayHoverTitle(d))}"` : "";
+        return `<i class="gantt-weekend${hol ? " holiday" : ""}" style="left:${i * dayW}px;width:${dayW}px"${title}></i>`;
+      }).join("")
     : "";
   const monthLines = [...monthStarts]
     .filter((i) => i > 0)
