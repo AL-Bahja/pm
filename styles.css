@@ -337,10 +337,15 @@ textarea { min-height: 80px; resize: vertical; }
   border-radius: 10px;
 }
 .send-mail-box .report-field {
-  flex: 1 1 240px;
-  min-width: 200px;
-  max-width: 360px;
+  flex: 1 1 280px;
+  min-width: 240px;
+  max-width: 420px;
   margin: 0;
+}
+.send-mail-field select {
+  min-height: 132px;
+  max-height: 220px;
+  width: 100%;
 }
 .send-mail-picked {
   display: flex;
@@ -603,8 +608,39 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-  flex: 0 1 auto;
-  max-width: calc(100% - 8px);
+  flex: 1 1 auto;
+  max-width: none;
+}
+.report-gantt .gantt-name,
+.gantt-compact .gantt-name {
+  overflow: visible;
+  white-space: normal;
+  align-items: flex-start;
+  height: auto;
+  min-height: var(--row-h);
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.report-gantt .gantt-name-text,
+.gantt-compact .gantt-name-text {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  word-break: break-word;
+  line-height: 1.2;
+}
+.report-gantt .gantt-row,
+.gantt-compact .gantt-row {
+  height: auto;
+  min-height: var(--row-h);
+  align-items: stretch;
+}
+.report-gantt .gantt-col,
+.gantt-compact .gantt-col,
+.report-gantt .gantt-track,
+.gantt-compact .gantt-track {
+  min-height: var(--row-h);
+  height: auto;
 }
 .gantt-scale { display: flex; flex-direction: column; flex-wrap: nowrap; }
 .gantt-years, .gantt-months, .gantt-days { display: flex; flex-wrap: nowrap; width: max-content; }
@@ -1097,7 +1133,14 @@ body.pdf-capture .gantt-day {
   line-height: 14px !important;
   height: 14px !important;
 }
-body.pdf-capture .print-sheet { break-after: page; page-break-after: always; }
+body.pdf-capture .gantt-name,
+body.pdf-capture .gantt-name-text {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: unset !important;
+  max-width: none !important;
+  word-break: break-word;
+}
 .error { color: var(--danger); min-height: 1.2em; }
 .print-only { display: none !important; }
 .readonly-note { background: #fff7ed; border: 1px solid #fed7aa; padding: 10px 12px; border-radius: 10px; }
@@ -1105,19 +1148,27 @@ body.pdf-capture .print-sheet { break-after: page; page-break-after: always; }
 [dir="rtl"] th, [dir="rtl"] td { text-align: right; }
 
 @media print {
-  @page { margin: 10mm; }
+  @page { margin: 14mm; }
   html, body {
     overflow: visible !important;
     height: auto !important;
     background: #fff;
     zoom: 1;
   }
-  .app-frame { display: block; height: auto; overflow: visible; }
+  .app-frame {
+    display: block !important;
+    grid-template-columns: none !important;
+    height: auto;
+    overflow: visible;
+  }
   .app-content { overflow: visible !important; height: auto; }
   html[dir="ltr"] { zoom: var(--print-zoom, 1); }
   .app-side, .topbar, .no-print, .save-toast { display: none !important; }
-  .app-frame { display: block; }
-  .page { padding: 0; max-width: none; overflow: visible !important; }
+  .page { padding: 0; max-width: 100%; overflow: visible !important; }
+  .report-page, .print-sheet {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
   .card { box-shadow: none; overflow: visible !important; }
   .table-scroll { overflow: visible !important; }
   .print-sheet { break-after: page; page-break-after: always; }
@@ -1125,8 +1176,8 @@ body.pdf-capture .print-sheet { break-after: page; page-break-after: always; }
   .report-cover {
     break-after: page;
     page-break-after: always;
-    break-inside: avoid;
-    page-break-inside: avoid;
+    break-inside: auto;
+    page-break-inside: auto;
   }
   .report-cover .report-title { font-size: 16px; margin: 0 0 4px; }
   .report-cover h3 { font-size: 12px; margin: 6px 0 4px; }
@@ -1149,25 +1200,33 @@ body.pdf-capture .print-sheet { break-after: page; page-break-after: always; }
   .report-gantt-page { break-before: page; page-break-before: always; break-after: page; page-break-after: always; }
   .report-table {
     width: 100%;
-    font-size: 9px;
-    table-layout: auto;
+    font-size: 8px;
+    table-layout: fixed;
     border-collapse: collapse;
   }
   .report-table th, .report-table td {
-    padding: 4px 5px;
+    padding: 3px 4px;
     word-break: break-word;
+    overflow-wrap: anywhere;
     white-space: normal;
     overflow: visible;
   }
   .gantt-wrap, .report-gantt { height: auto !important; max-height: none !important; overflow: visible !important; width: 100% !important; }
   .report-gantt .gantt,
   .gantt-compact {
-    max-width: none !important;
-    width: auto !important;
+    max-width: 100% !important;
+    width: 100% !important;
     overflow: visible !important;
     height: auto !important;
   }
-  .gantt, .gantt-scroll { overflow: visible !important; height: auto; max-width: none; }
+  .gantt, .gantt-scroll { overflow: visible !important; height: auto; max-width: 100%; }
+  .gantt-name, .gantt-name-text {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+    max-width: none !important;
+    word-break: break-word;
+  }
   .gantt-day {
     font-size: 6.5px !important;
     overflow: visible !important;
