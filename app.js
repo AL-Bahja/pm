@@ -213,7 +213,7 @@ const I18N = {
     googleHint: "من أي حاسبة: اربط جوجل درايف بحساب الشركة picassomega86@gmail.com (هذا التخزين المشترك). بعد ذلك يظهر دخول النظام: مدير المشاريع أو مستخدم آخر.",
     googleWrongAccount: "يفضّل استخدام حساب درايف الشركة:",
     driveFolder: "مجلد التطبيق",
-    ganttSwipe: "على الهاتف: اسحب للتواريخ. خطان لكل مهمة: الرمادي خط الأساس، والسفلي المتوقع مع الفعلي فوقه.",
+    ganttSwipe: "اسحب المخطط يميناً ويساراً. اسم المهمة فوق الشريط.",
     ganttRowLines: "خطوط أفقية لتحديد المهام",
     ganttShowWeekends: "أيام العطل",
     ganttShowPlan: "التواريخ المتوقعة",
@@ -459,7 +459,7 @@ const I18N = {
     googleHint: "On any PC, connect Google Drive with the company account picassomega86@gmail.com (shared storage). Then sign in as project manager or another user.",
     googleWrongAccount: "Prefer the company Drive account:",
     driveFolder: "App folder",
-    ganttSwipe: "On phone: swipe for dates. Two bars per task: gray = baseline, lower = planned with actual on top.",
+    ganttSwipe: "Swipe the chart sideways. The task name sits above its bars.",
     ganttRowLines: "Horizontal lines to track task rows",
     ganttShowWeekends: "Non-working days",
     ganttShowPlan: "Planned dates",
@@ -807,8 +807,9 @@ function delayBarRange(task) {
 }
 
 function ganttLegendHtml() {
-  return `<div class="gantt-legend-box">
-    <h4>${tr("ganttLegendTitle")}</h4>
+  const phone = window.matchMedia("(max-width: 800px)").matches;
+  return `<details class="gantt-legend-box"${phone ? "" : " open"}>
+    <summary>${tr("ganttLegendTitle")}</summary>
     <div class="legend gantt-legend">
       <span><i class="swatch baseline"></i>${tr("baseline")}</span>
       <span><i class="swatch planned"></i>${tr("planned")}</span>
@@ -819,7 +820,7 @@ function ganttLegendHtml() {
       <span><i class="swatch today"></i>${tr("legendToday")}</span>
       <span><i class="swatch weekend"></i>${tr("ganttShowWeekends")}</span>
     </div>
-  </div>`;
+  </details>`;
 }
 
 function ganttFillPct(task) {
@@ -2018,9 +2019,9 @@ function projectView() {
       <div class="row no-print">
         <button class="btn secondary" data-rep>${tr("projectReport")}</button>
         ${isPm() ? `<button class="btn secondary" data-base>${tr("setBaseline")}</button>
-        <button class="btn danger" data-reset-dates>${tr("resetDates")}</button>
-        <button class="btn secondary" data-copy>${tr("copyProject")}</button>
-        <button class="btn danger" data-delp>${tr("delete")}</button>` : ""}
+        <button class="btn danger hide-mobile" data-reset-dates>${tr("resetDates")}</button>
+        <button class="btn secondary hide-mobile" data-copy>${tr("copyProject")}</button>
+        <button class="btn danger hide-mobile" data-delp>${tr("delete")}</button>` : ""}
       </div>
     </div>
     <div class="project-main">${
@@ -2064,7 +2065,7 @@ function projectView() {
             ${isPm() ? `<button class="btn" data-addt>${tr("addTask")}</button>` : ""}
           </div>
           <div class="card table-scroll" style="padding:8px 16px">
-            <table class="stack-table">
+            <table class="stack-table task-cards">
               <thead><tr>
                 <th>#</th><th>${tr("taskName")}</th>${isPm() ? `<th>${tr("predecessors")}</th>` : ""}<th>${tr("status")}</th>
                 <th>${tr("percent")}</th>
@@ -2158,24 +2159,24 @@ function taskRow(project, taskItem, parent, index, label, isSub, expanded, isLas
   const late = isTaskDelayed(taskItem) ? " delayed-task" : "";
   const statusKey = isTaskDelayed(taskItem) ? "delayed" : (taskItem.status || "not_started");
   const row = el(`<tr class="${parent ? "child-row" : "parent-row"}${crit}${late}">
-    <td data-label="#"> ${label}</td>
-    <td data-label="${esc(tr("taskName"))}" class="${isSub ? "task-indent" : ""}"><span class="task-name-cell">${twist}<span class="task-title">${esc(taskItem.name)}${msMark}</span>${count}</span></td>
-    ${isPm() ? `<td data-label="${esc(tr("predecessors"))}">${esc(predText(taskItem, project))}</td>` : ""}
+    <td class="hide-mobile" data-label="#"> ${label}</td>
+    <td data-label="${esc(tr("taskName"))}" class="task-name-td ${isSub ? "task-indent" : ""}"><span class="task-name-cell">${twist}<span class="task-title">${esc(taskItem.name)}${msMark}</span>${count}</span></td>
+    ${isPm() ? `<td class="hide-mobile" data-label="${esc(tr("predecessors"))}">${esc(predText(taskItem, project))}</td>` : ""}
     <td data-label="${esc(tr("status"))}"><span class="badge ${statusKey}">${tr(statusKey)}</span></td>
     <td data-label="${esc(tr("percent"))}">${Number(taskItem.percent || 0)}%</td>
-    <td data-label="${esc(tr("workDays"))}">${taskWorkDays(taskItem) || "—"}</td>
+    <td class="hide-mobile" data-label="${esc(tr("workDays"))}">${taskWorkDays(taskItem) || "—"}</td>
     <td data-label="${esc(tr("planned"))}">${fmtDate(planStart(taskItem))} → ${fmtDate(planEnd(taskItem))}</td>
-    <td data-label="${esc(tr("actual"))}">${fmtDate(taskItem.actualStart)} → ${fmtDate(taskItem.actualEnd)}</td>
-    <td data-label="${esc(tr("slack"))}">${taskItem.slack === "" || taskItem.slack == null ? "—" : taskItem.slack}</td>
-    <td data-label="${esc(tr("plannedCost"))}">${money(taskItem.plannedCost)}</td>
-    <td data-label="${esc(tr("actualCost"))}">${money(taskItem.actualCost)}</td>
-    ${varCell(varianceOf(taskItem), `data-label="${esc(tr("variance"))}"`)}
+    <td class="hide-mobile" data-label="${esc(tr("actual"))}">${fmtDate(taskItem.actualStart)} → ${fmtDate(taskItem.actualEnd)}</td>
+    <td class="hide-mobile" data-label="${esc(tr("slack"))}">${taskItem.slack === "" || taskItem.slack == null ? "—" : taskItem.slack}</td>
+    <td class="hide-mobile" data-label="${esc(tr("plannedCost"))}">${money(taskItem.plannedCost)}</td>
+    <td class="hide-mobile" data-label="${esc(tr("actualCost"))}">${money(taskItem.actualCost)}</td>
+    ${(() => { const n = varianceOf(taskItem); return `<td class="${varClass(n)} hide-mobile" data-label="${esc(tr("variance"))}">${varText(n)}</td>`; })()}
     ${isPm() ? `<td class="row actions">
-      <button class="btn small secondary" data-up>${tr("up")}</button>
-      <button class="btn small secondary" data-down>${tr("down")}</button>
-      ${!isSub ? `<button class="btn small secondary" data-sub>${tr("addSubtask")}</button>` : ""}
+      <button class="btn small secondary hide-mobile" data-up>${tr("up")}</button>
+      <button class="btn small secondary hide-mobile" data-down>${tr("down")}</button>
+      ${!isSub ? `<button class="btn small secondary hide-mobile" data-sub>${tr("addSubtask")}</button>` : ""}
       <button class="btn small" data-ed>${tr("editTask")}</button>
-      <button class="btn small danger" data-del>${tr("delete")}</button>
+      <button class="btn small danger hide-mobile" data-del>${tr("delete")}</button>
     </td>` : ""}
   </tr>`);
   if (isPm()) {
@@ -2390,10 +2391,10 @@ function keyGanttDates(project) {
     .sort((a, b) => a - b);
 }
 
-function fitGanttCols(project, innerWidth) {
+function fitGanttCols(project, innerWidth, minDayW) {
   const keys = keyGanttDates(project);
   if (!keys.length) return [];
-  const minDayW = 10;
+  minDayW = minDayW || 10;
   const maxCols = Math.max(keys.length, Math.floor(Math.max(innerWidth, 180) / minDayW));
   const all = enumerateDays(keys[0], keys[keys.length - 1]);
   const keyMs = new Set(keys.map((d) => d.getTime()));
@@ -2438,8 +2439,8 @@ function ganttOptsHtml() {
   return `<div class="gantt-opts">
     <label class="chk"><input type="checkbox" data-gantt-opt="ganttRowLines" ${state.ganttRowLines ? "checked" : ""}> ${tr("ganttRowLines")}</label>
     <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowWeekends" ${state.ganttShowWeekends ? "checked" : ""}> ${tr("ganttShowWeekends")}</label>
-    <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowPlan" ${state.ganttShowPlan ? "checked" : ""}> ${tr("ganttShowPlan")}</label>
-    <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowActual" ${state.ganttShowActual ? "checked" : ""}> ${tr("ganttShowActual")}</label>
+    <label class="chk hide-mobile"><input type="checkbox" data-gantt-opt="ganttShowPlan" ${state.ganttShowPlan ? "checked" : ""}> ${tr("ganttShowPlan")}</label>
+    <label class="chk hide-mobile"><input type="checkbox" data-gantt-opt="ganttShowActual" ${state.ganttShowActual ? "checked" : ""}> ${tr("ganttShowActual")}</label>
   </div>`;
 }
 
@@ -2467,17 +2468,20 @@ function ganttHtml(project, opts) {
   computeCritical(project);
   const compact = !!(opts && opts.compact);
   const mobile = window.matchMedia("(max-width: 800px)").matches;
-  const targetW = Number(opts && opts.width) || (compact ? 670 : 980);
-  const nameW = compact || mobile ? ganttNameColWidth(project, true) : ganttNameColWidth(project, false);
-  const showPlanCol = !!state.ganttShowPlan && (!mobile || compact);
-  const showActCol = !!state.ganttShowActual && (!mobile || compact);
+  const phone = mobile && !compact;
+  const targetW = Number(opts && opts.width) || (phone
+    ? Math.max(280, Math.min((window.innerWidth || 360) - 28, 440))
+    : compact ? 670 : 980);
+  const nameW = phone ? 0 : compact ? Math.min(160, ganttNameColWidth(project, true)) : ganttNameColWidth(project, false);
+  const showPlanCol = !phone && !!state.ganttShowPlan && (!mobile || compact);
+  const showActCol = !phone && !!state.ganttShowActual && (!mobile || compact);
   const showWeekends = state.ganttShowWeekends !== false;
   const dateW = compact ? 72 : 132;
   const planW = showPlanCol ? dateW : 0;
   const actW = showActCol ? dateW : 0;
   const lockW = nameW + planW + actW;
   const inner = Math.max(180, targetW - lockW);
-  const sparse = compact ? fitGanttCols(project, inner) : null;
+  const sparse = compact || phone ? fitGanttCols(project, inner, phone ? 16 : 10) : null;
   const cols = sparse && sparse.length ? sparse : null;
   const dates = cols && cols.length ? cols.map((c) => c.date) : collectDates(project);
   if (!dates.length) return `<p class="muted">—</p>`;
@@ -2485,8 +2489,8 @@ function ganttHtml(project, opts) {
   const max = cols ? cols[cols.length - 1].date : new Date(Math.max(...dates));
   const days = cols ? cols.map((c) => c.date) : enumerateDays(min, max);
   const colCount = Math.max(days.length, 1);
-  const dayW = compact ? Math.max(10, Math.floor(inner / colCount)) : mobile ? 14 : 16;
-  const rowH = mobile ? 28 : 24;
+  const dayW = compact || phone ? Math.max(10, Math.floor(inner / colCount)) : mobile ? 14 : 16;
+  const rowH = phone ? 36 : mobile ? 28 : 24;
   const headH = 48;
   const scaleW = colCount * dayW;
   const years = groupDays(days, (d) => String(d.getFullYear()));
@@ -2619,11 +2623,11 @@ function ganttHtml(project, opts) {
     });
   });
   const svgH = headH + vis.length * rowH;
-  const svg = links.length
+  const svg = !phone && links.length
     ? `<svg class="gantt-links" width="${lockW + scaleW}" height="${svgH}" viewBox="0 0 ${lockW + scaleW} ${svgH}" preserveAspectRatio="none">${links.join("")}</svg>`
     : "";
 
-  return `<div class="gantt${compact ? " gantt-compact" : ""}${state.ganttRowLines ? " gantt-row-lines" : ""}" style="--day-w:${dayW}px;--name-w:${nameW}px;--plan-w:${planW}px;--act-w:${actW}px;--date-w:${dateW}px;--lock-w:${lockW}px;width:${lockW + scaleW}px;max-width:100%">
+  return `<div class="gantt${phone ? " gantt-phone" : ""}${compact ? " gantt-compact" : ""}${state.ganttRowLines ? " gantt-row-lines" : ""}" style="--day-w:${dayW}px;--name-w:${phone ? 0 : nameW}px;--plan-w:${planW}px;--act-w:${actW}px;--date-w:${dateW}px;--lock-w:${lockW}px;width:${phone ? "100%" : (lockW + scaleW) + "px"};max-width:100%">
     <div class="gantt-scroll">
       <div class="gantt-head">
         <div class="gantt-sticky-name">
