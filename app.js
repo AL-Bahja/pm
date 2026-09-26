@@ -3487,20 +3487,29 @@ function sendReportPdf(project, emails) {
     });
 }
 
+function printContentWidth() {
+  const report = document.querySelector(".report-page") || document.querySelector(".page");
+  if (!report) return 1;
+  let w = Math.max(report.scrollWidth, report.offsetWidth);
+  report.querySelectorAll(".gantt, .print-sheet, table").forEach((n) => {
+    w = Math.max(w, n.scrollWidth || 0, n.offsetWidth || 0);
+  });
+  return w;
+}
+
 function printReport() {
   applyPrintOrient();
-  const pages = state.printFit;
   const root = document.documentElement;
   const reset = () => root.style.setProperty("--print-zoom", "1");
   reset();
-  if (!pages || pages === "auto") {
-    window.print();
-    return;
+  const avail = state.printOrient === "landscape" ? 1020 : 640;
+  let zoom = Math.min(1, Math.max(0.4, avail / printContentWidth()));
+  const pages = state.printFit;
+  if (pages && pages !== "auto") {
+    const report = document.querySelector(".report-page") || document.querySelector(".page");
+    const h = Math.max(report ? report.scrollHeight : 1, 1);
+    zoom = Math.min(zoom, Math.max(0.4, (Number(pages) * 980) / h));
   }
-  const report = document.querySelector(".report-page") || document.querySelector(".page");
-  const pageH = 980;
-  const h = Math.max(report ? report.scrollHeight : 1, 1);
-  const zoom = Math.min(1, Math.max(0.45, (Number(pages) * pageH) / h));
   root.style.setProperty("--print-zoom", String(zoom));
   const done = () => {
     reset();

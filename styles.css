@@ -1165,40 +1165,64 @@ body.pdf-capture[dir="rtl"] td {
 [dir="rtl"] th, [dir="rtl"] td { text-align: right; }
 
 @media print {
-  @page { margin: 14mm; }
+  @page { margin: 12mm; }
   html, body {
     overflow: visible !important;
     height: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
     background: #fff;
-    zoom: 1;
+    zoom: 1 !important;
   }
-  .app-frame {
-    display: block !important;
-    grid-template-columns: none !important;
-    height: auto;
-    overflow: visible;
+  html[dir="rtl"] {
+    direction: ltr !important;
   }
-  .app-content { overflow: visible !important; height: auto; }
-  html[dir="ltr"] { zoom: var(--print-zoom, 1); }
-  html[dir="rtl"] { zoom: var(--print-zoom, 1); }
-  .app-side, .topbar, .no-print, .save-toast { display: none !important; }
-  .page { padding: 0; max-width: 100%; overflow: visible !important; }
-  .report-page, .print-sheet {
-    max-width: 100%;
-    box-sizing: border-box;
-  }
+  html[dir="rtl"] body,
+  html[dir="rtl"] .app-shell,
+  html[dir="rtl"] .app-frame,
+  html[dir="rtl"] .app-content,
+  html[dir="rtl"] .page,
   html[dir="rtl"] .report-page,
   html[dir="rtl"] .print-sheet {
-    padding-inline: 8px;
+    direction: rtl;
+  }
+  .app-shell,
+  .app-frame,
+  .app-content {
+    display: block !important;
+    grid-template-columns: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
     overflow: visible !important;
+    position: static !important;
+  }
+  .app-side, .topbar, .no-print, .save-toast { display: none !important; width: 0 !important; }
+  .page { padding: 0 !important; max-width: 100% !important; overflow: visible !important; width: 100% !important; }
+  .report-page {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+    zoom: var(--print-zoom, 1);
+    transform-origin: top left;
+  }
+  html[dir="rtl"] .report-page {
+    padding: 0;
+    overflow: hidden !important;
+  }
+  html[dir="rtl"] .print-sheet {
+    padding-inline: 2mm;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
   }
   html[dir="rtl"] .report-table th,
   html[dir="rtl"] .report-table td,
   html[dir="rtl"] .info-table th,
   html[dir="rtl"] .info-table td {
     text-align: start;
-    padding: 3px 7px;
-    line-height: 1.4;
+    padding: 3px 6px;
+    line-height: 1.35;
     overflow: visible;
     word-break: break-word;
   }
@@ -1244,15 +1268,20 @@ body.pdf-capture[dir="rtl"] td {
     white-space: normal;
     overflow: visible;
   }
-  .gantt-wrap, .report-gantt { height: auto !important; max-height: none !important; overflow: visible !important; width: 100% !important; }
+  .gantt-wrap, .report-gantt { height: auto !important; max-height: none !important; overflow: hidden !important; width: 100% !important; max-width: 100% !important; }
   .report-gantt .gantt,
   .gantt-compact {
     max-width: 100% !important;
     width: 100% !important;
-    overflow: visible !important;
+    overflow: hidden !important;
     height: auto !important;
   }
-  .gantt, .gantt-scroll { overflow: visible !important; height: auto; max-width: 100%; }
+  html[dir="rtl"] .gantt,
+  html[dir="rtl"] .gantt-scroll {
+    direction: ltr;
+    unicode-bidi: isolate;
+    max-width: 100% !important;
+  }
   .gantt-name, .gantt-name-text {
     white-space: normal !important;
     overflow: visible !important;
