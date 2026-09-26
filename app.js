@@ -216,9 +216,8 @@ const I18N = {
     ganttSwipe: "نفس عرض الحاسبة: اسحب للتمرير، وإصبعان أو الأزرار للتكبير.",
     ganttZoomOut: "تصغير",
     ganttZoomIn: "تكبير",
-    ganttFs: "أفقي ملء الشاشة",
-    ganttFsExit: "إغلاق العرض",
-    ganttFsRotate: "أدر الهاتف أفقياً لعرض المخطط على كامل الشاشة",
+    ganttFs: "الوضع الأفقي",
+    ganttFsExit: "إغلاق",
     ganttRowLines: "خطوط أفقية لتحديد المهام",
     ganttShowWeekends: "أيام العطل",
     ganttShowPlan: "التواريخ المتوقعة",
@@ -467,9 +466,8 @@ const I18N = {
     ganttSwipe: "Same layout as desktop: swipe to pan, pinch or use the buttons to zoom.",
     ganttZoomOut: "Zoom out",
     ganttZoomIn: "Zoom in",
-    ganttFs: "Landscape full screen",
-    ganttFsExit: "Close view",
-    ganttFsRotate: "Turn the phone sideways to fill the screen with the Gantt chart",
+    ganttFs: "Landscape",
+    ganttFsExit: "Close",
     ganttRowLines: "Horizontal lines to track task rows",
     ganttShowWeekends: "Non-working days",
     ganttShowPlan: "Planned dates",
@@ -1649,17 +1647,34 @@ function restoreViewScroll(saved) {
   }
 }
 
+function clearGanttLand() {
+  document.querySelectorAll("[data-gantt-land]").forEach((n) => n.remove());
+  document.documentElement.classList.remove("gantt-land");
+}
+
+function mountGanttLand() {
+  clearGanttLand();
+  if (!state.ganttFs) return;
+  const project = (state.data.projects || []).find((p) => p.id === state.projectId);
+  if (!project || !canOpenProject(project)) {
+    state.ganttFs = false;
+    return;
+  }
+  document.documentElement.classList.add("gantt-land");
+  document.body.appendChild(ganttLandView(project));
+}
+
 function render() {
   applyTheme();
   applyPrintOrient();
   document.documentElement.lang = state.lang;
   document.documentElement.dir = state.lang === "ar" ? "rtl" : "ltr";
   if (!(state.view === "project" && state.projectTab === "gantt")) state.ganttFs = false;
-  document.documentElement.classList.toggle("gantt-fs", !!state.ganttFs);
   document.title = tr("app");
   const savedScroll = captureViewScroll();
   const root = document.getElementById("app");
   const user = currentUser();
+  clearGanttLand();
   if (!user) {
     root.replaceChildren(loginView());
     return;
@@ -1673,6 +1688,7 @@ function render() {
     return;
   }
   root.replaceChildren(shellView(user));
+  mountGanttLand();
   requestAnimationFrame(() => restoreViewScroll(savedScroll));
 }
 
@@ -2057,7 +2073,7 @@ function projectView() {
           </table>
         </section>` : tab === "gantt" ? `<section class="project-panel is-on gantt-stage" data-panel="gantt" data-gantt-stage>
           <div class="gantt-fs-bar no-print">
-            <button type="button" class="btn show-mobile" data-gantt-fs>${state.ganttFs ? tr("ganttFsExit") : tr("ganttFs")}</button>
+            <button type="button" class="btn show-mobile" data-gantt-fs>${tr("ganttFs")}</button>
             <div class="gantt-zoom-btns">
               <button type="button" class="btn small secondary" data-zoom-out title="${esc(tr("ganttZoomOut"))}">−</button>
               <span class="gantt-zoom-label" data-zoom-label>50%</span>
@@ -2071,7 +2087,6 @@ function projectView() {
             ${ganttOptsHtml()}
           </div>
           <div class="card gantt-wrap">${ganttHtml(project)}</div>
-          <div class="gantt-rotate-hint no-print" aria-hidden="true">${tr("ganttFsRotate")}</div>
         </section>` : tab === "files" ? `<section class="project-panel is-on" data-panel="files">
           <h3>${tr("projectFiles")}</h3>
           <div class="file-folder">
@@ -2668,6 +2683,32 @@ function ganttHtml(project, opts) {
   </div>`;
 }
 
+function ganttLandView(project) {
+  rollupProject(project);
+  computeCritical(project);
+  const box = el(`<div class="gantt-land-layer no-print" data-gantt-land>
+    <div class="gantt-fs-bar">
+      <button type="button" class="btn" data-gantt-fs>${tr("ganttFsExit")}</button>
+      <div class="gantt-zoom-btns">
+        <button type="button" class="btn small secondary" data-zoom-out title="${esc(tr("ganttZoomOut"))}">−</button>
+        <span class="gantt-zoom-label" data-zoom-label>70%</span>
+        <button type="button" class="btn small secondary" data-zoom-in title="${esc(tr("ganttZoomIn"))}">+</button>
+      </div>
+    </div>
+    <div class="card gantt-wrap">${ganttHtml(project)}</div>
+  </div>`);
+  bindGanttScroll(box);
+  bindGanttFs(box);
+  box.querySelectorAll("[data-twist]").forEach((btn) => {
+    btn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleExpanded(btn.getAttribute("data-twist"));
+    };
+  });
+  return box;
+}
+
 function bindGanttScroll(box) {
   if (!box) return;
   const wrap = box.querySelector(".gantt-wrap:not(.report-gantt)");
@@ -2725,85 +2766,16 @@ function bindGanttScroll(box) {
   }, { passive: false });
 }
 
-function ganttFsElement() {
-  return document.fullscreenElement || document.webkitFullscreenElement || null;
-}
-
-function requestGanttFullscreen(el) {
-  if (!el) return Promise.resolve();
-  if (el.requestFullscreen) return el.requestFullscreen();
-  if (el.webkitRequestFullscreen) {
-    el.webkitRequestFullscreen();
-    return Promise.resolve();
-  }
-  return Promise.resolve();
-}
-
-function exitGanttFullscreen() {
-  if (document.exitFullscreen && ganttFsElement()) return document.exitFullscreen();
-  if (document.webkitExitFullscreen && ganttFsElement()) {
-    document.webkitExitFullscreen();
-    return Promise.resolve();
-  }
-  return Promise.resolve();
-}
-
-function lockLandscape() {
-  try {
-    if (screen.orientation && screen.orientation.lock) return screen.orientation.lock("landscape");
-  } catch (e) {}
-  return Promise.resolve();
-}
-
-function unlockOrientation() {
-  try {
-    if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
-  } catch (e) {}
-}
-
 function setGanttFs(on) {
-  const next = !!on;
-  if (next === !!state.ganttFs) {
-    if (next) {
-      const stage = document.querySelector("[data-gantt-stage]");
-      requestGanttFullscreen(stage || document.documentElement).then(lockLandscape).catch(() => {});
-    }
-    return;
-  }
-  state.ganttFs = next;
-  if (!next) {
-    state._ganttFsLeaving = true;
-    exitGanttFullscreen().catch(() => {}).finally(() => {
-      unlockOrientation();
-      state._ganttFsLeaving = false;
-      render();
-    });
-    return;
-  }
+  const phone = window.matchMedia("(max-width: 800px)").matches;
+  if (on && !phone) return;
+  state.ganttFs = !!on;
   render();
-  requestAnimationFrame(() => {
-    const stage = document.querySelector("[data-gantt-stage]");
-    requestGanttFullscreen(stage || document.documentElement).then(lockLandscape).catch(() => lockLandscape().catch(() => {}));
-  });
 }
 
 function bindGanttFs(box) {
   const btn = box && box.querySelector("[data-gantt-fs]");
   if (btn) btn.onclick = () => setGanttFs(!state.ganttFs);
-}
-
-if (!window.__ganttFsBound) {
-  window.__ganttFsBound = true;
-  const onFsChange = () => {
-    if (state._ganttFsLeaving) return;
-    if (!ganttFsElement() && state.ganttFs) {
-      state.ganttFs = false;
-      unlockOrientation();
-      render();
-    }
-  };
-  document.addEventListener("fullscreenchange", onFsChange);
-  document.addEventListener("webkitfullscreenchange", onFsChange);
 }
 
 function moveInList(list, index, dir) {

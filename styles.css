@@ -1074,75 +1074,69 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   margin: 0 0 8px;
 }
 .show-mobile { display: none !important; }
-.gantt-rotate-hint { display: none; }
-html.gantt-fs,
-html.gantt-fs body {
-  overflow: hidden;
-  background: #fff;
-}
-html.gantt-fs .app-frame {
-  grid-template-columns: 1fr;
-  grid-template-rows: minmax(0, 1fr);
-}
-html.gantt-fs .app-side,
-html.gantt-fs .project-head,
-html.gantt-fs .gantt-stage > h3,
-html.gantt-fs .gantt-hint,
-html.gantt-fs .gantt-legend-box,
-html.gantt-fs .gantt-toolbar {
-  display: none !important;
-}
-html.gantt-fs .app-content,
-html.gantt-fs .page {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  padding: 0;
-}
-html.gantt-fs .gantt-stage {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  margin: 0;
-  background: #fff;
+.gantt-land-layer {
   display: flex;
   flex-direction: column;
-  padding-top: env(safe-area-inset-top);
-  padding-right: env(safe-area-inset-right);
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
+  position: fixed;
+  z-index: 10050;
+  background: #fff;
+  direction: ltr;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  width: 100dvw;
+  height: 100dvh;
+  box-sizing: border-box;
+  overflow: hidden;
 }
-html.gantt-fs .gantt-fs-bar {
+html.gantt-land,
+html.gantt-land body {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+html.gantt-land .app-shell {
+  visibility: hidden;
+}
+html.gantt-land .gantt-land-layer .gantt-fs-bar {
   flex: 0 0 auto;
   margin: 0;
-  padding: 6px 10px;
+  padding: 8px 10px;
+  padding-top: max(8px, env(safe-area-inset-top));
   border-bottom: 1px solid var(--line);
-  background: #f4f8fa;
+  background: #0f4a45;
+  color: #fff;
+  direction: rtl;
 }
-html.gantt-fs .gantt-wrap {
+html[dir="ltr"].gantt-land .gantt-land-layer .gantt-fs-bar { direction: ltr; }
+html.gantt-land .gantt-land-layer .gantt-fs-bar .btn {
+  background: #fff;
+  color: var(--ink);
+}
+html.gantt-land .gantt-land-layer .gantt-zoom-label { color: #e7f3f1; }
+html.gantt-land .gantt-land-layer .gantt-wrap {
   flex: 1 1 auto;
+  min-height: 0;
   height: auto !important;
   max-height: none !important;
-  min-height: 0 !important;
   border-radius: 0;
   border: 0;
   box-shadow: none;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
-@media (orientation: portrait) {
-  html.gantt-fs .gantt-rotate-hint {
-    display: flex;
-    position: absolute;
-    inset: 52px 0 0;
-    z-index: 6;
-    background: rgba(18, 32, 43, 0.94);
-    color: #fff;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 28px 22px;
-    font-size: 18px;
-    font-weight: 700;
-    line-height: 1.45;
+@media (max-width: 800px) and (orientation: portrait) {
+  html.gantt-land .gantt-land-layer {
+    top: 0;
+    left: 0;
+    right: auto;
+    bottom: auto;
+    width: 100vh;
+    width: 100dvh;
+    height: 100vw;
+    height: 100dvw;
+    transform: rotate(90deg) translateY(-100%);
+    transform-origin: top left;
   }
 }
 .swatch { display: inline-block; width: 14px; height: 10px; border-radius: 4px; margin-inline-end: 6px; vertical-align: middle; }
