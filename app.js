@@ -216,6 +216,9 @@ const I18N = {
     ganttSwipe: "نفس عرض الحاسبة: اسحب للتمرير، وإصبعان أو الأزرار للتكبير.",
     ganttZoomOut: "تصغير",
     ganttZoomIn: "تكبير",
+    ganttFs: "أفقي ملء الشاشة",
+    ganttFsExit: "إغلاق العرض",
+    ganttFsRotate: "أدر الهاتف أفقياً لعرض المخطط على كامل الشاشة",
     ganttRowLines: "خطوط أفقية لتحديد المهام",
     ganttShowWeekends: "أيام العطل",
     ganttShowPlan: "التواريخ المتوقعة",
@@ -464,6 +467,9 @@ const I18N = {
     ganttSwipe: "Same layout as desktop: swipe to pan, pinch or use the buttons to zoom.",
     ganttZoomOut: "Zoom out",
     ganttZoomIn: "Zoom in",
+    ganttFs: "Landscape full screen",
+    ganttFsExit: "Close view",
+    ganttFsRotate: "Turn the phone sideways to fill the screen with the Gantt chart",
     ganttRowLines: "Horizontal lines to track task rows",
     ganttShowWeekends: "Non-working days",
     ganttShowPlan: "Planned dates",
@@ -1471,6 +1477,7 @@ const state = {
   ganttShowWeekends: localStorage.getItem(KEY + "-ganttShowWeekends") !== "off",
   ganttShowPlan: localStorage.getItem(KEY + "-ganttShowPlan") !== "off",
   ganttShowActual: localStorage.getItem(KEY + "-ganttShowActual") !== "off",
+  ganttFs: false,
   driveReady: false,
   driveSaving: false,
   driveError: "",
@@ -1647,6 +1654,8 @@ function render() {
   applyPrintOrient();
   document.documentElement.lang = state.lang;
   document.documentElement.dir = state.lang === "ar" ? "rtl" : "ltr";
+  if (!(state.view === "project" && state.projectTab === "gantt")) state.ganttFs = false;
+  document.documentElement.classList.toggle("gantt-fs", !!state.ganttFs);
   document.title = tr("app");
   const savedScroll = captureViewScroll();
   const root = document.getElementById("app");
@@ -1887,6 +1896,7 @@ function shellView(user) {
     b.onclick = () => {
       state.view = "project";
       state.projectTab = b.getAttribute("data-ptab");
+      if (state.projectTab !== "gantt") state.ganttFs = false;
       render();
     };
   });
@@ -2045,19 +2055,23 @@ function projectView() {
             ${extraRows}
             </tbody>
           </table>
-        </section>` : tab === "gantt" ? `<section class="project-panel is-on" data-panel="gantt">
-          <h3>${tr("gantt")}</h3>
-          <p class="hint gantt-hint no-print">${tr("ganttSwipe")}</p>
-          ${ganttLegendHtml()}
-          <div class="gantt-toolbar no-print">
-            ${ganttOptsHtml()}
+        </section>` : tab === "gantt" ? `<section class="project-panel is-on gantt-stage" data-panel="gantt" data-gantt-stage>
+          <div class="gantt-fs-bar no-print">
+            <button type="button" class="btn show-mobile" data-gantt-fs>${state.ganttFs ? tr("ganttFsExit") : tr("ganttFs")}</button>
             <div class="gantt-zoom-btns">
               <button type="button" class="btn small secondary" data-zoom-out title="${esc(tr("ganttZoomOut"))}">−</button>
               <span class="gantt-zoom-label" data-zoom-label>50%</span>
               <button type="button" class="btn small secondary" data-zoom-in title="${esc(tr("ganttZoomIn"))}">+</button>
             </div>
           </div>
+          <h3>${tr("gantt")}</h3>
+          <p class="hint gantt-hint no-print">${tr("ganttSwipe")}</p>
+          ${ganttLegendHtml()}
+          <div class="gantt-toolbar no-print">
+            ${ganttOptsHtml()}
+          </div>
           <div class="card gantt-wrap">${ganttHtml(project)}</div>
+          <div class="gantt-rotate-hint no-print" aria-hidden="true">${tr("ganttFsRotate")}</div>
         </section>` : tab === "files" ? `<section class="project-panel is-on" data-panel="files">
           <h3>${tr("projectFiles")}</h3>
           <div class="file-folder">
@@ -2100,6 +2114,7 @@ function projectView() {
   }
   bindGanttScroll(box);
   bindGanttOpts(box);
+  bindGanttFs(box);
   box.querySelectorAll("[data-twist]").forEach((btn) => {
     btn.onclick = (e) => {
       e.preventDefault();
@@ -2659,10 +2674,10 @@ function bindGanttScroll(box) {
   const gantt = wrap && wrap.querySelector(".gantt");
   if (!wrap || !gantt) return;
   const phone = window.matchMedia("(max-width: 800px)").matches;
-  const key = KEY + "-ganttZoom";
+  const key = KEY + (state.ganttFs ? "-ganttZoomFs" : "-ganttZoom");
   const minZ = 0.4;
   const maxZ = 2.5;
-  const defZ = phone ? 0.5 : 1;
+  const defZ = state.ganttFs ? 0.72 : (phone ? 0.5 : 1);
   let z = Number(localStorage.getItem(key));
   if (!Number.isFinite(z) || z < minZ || z > maxZ) z = defZ;
   const useCssZoom = typeof CSS !== "undefined" && CSS.supports && CSS.supports("zoom", "0.5");
@@ -2708,6 +2723,87 @@ function bindGanttScroll(box) {
     const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
     setZ(z0 * (d / dist0));
   }, { passive: false });
+}
+
+function ganttFsElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null;
+}
+
+function requestGanttFullscreen(el) {
+  if (!el) return Promise.resolve();
+  if (el.requestFullscreen) return el.requestFullscreen();
+  if (el.webkitRequestFullscreen) {
+    el.webkitRequestFullscreen();
+    return Promise.resolve();
+  }
+  return Promise.resolve();
+}
+
+function exitGanttFullscreen() {
+  if (document.exitFullscreen && ganttFsElement()) return document.exitFullscreen();
+  if (document.webkitExitFullscreen && ganttFsElement()) {
+    document.webkitExitFullscreen();
+    return Promise.resolve();
+  }
+  return Promise.resolve();
+}
+
+function lockLandscape() {
+  try {
+    if (screen.orientation && screen.orientation.lock) return screen.orientation.lock("landscape");
+  } catch (e) {}
+  return Promise.resolve();
+}
+
+function unlockOrientation() {
+  try {
+    if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+  } catch (e) {}
+}
+
+function setGanttFs(on) {
+  const next = !!on;
+  if (next === !!state.ganttFs) {
+    if (next) {
+      const stage = document.querySelector("[data-gantt-stage]");
+      requestGanttFullscreen(stage || document.documentElement).then(lockLandscape).catch(() => {});
+    }
+    return;
+  }
+  state.ganttFs = next;
+  if (!next) {
+    state._ganttFsLeaving = true;
+    exitGanttFullscreen().catch(() => {}).finally(() => {
+      unlockOrientation();
+      state._ganttFsLeaving = false;
+      render();
+    });
+    return;
+  }
+  render();
+  requestAnimationFrame(() => {
+    const stage = document.querySelector("[data-gantt-stage]");
+    requestGanttFullscreen(stage || document.documentElement).then(lockLandscape).catch(() => lockLandscape().catch(() => {}));
+  });
+}
+
+function bindGanttFs(box) {
+  const btn = box && box.querySelector("[data-gantt-fs]");
+  if (btn) btn.onclick = () => setGanttFs(!state.ganttFs);
+}
+
+if (!window.__ganttFsBound) {
+  window.__ganttFsBound = true;
+  const onFsChange = () => {
+    if (state._ganttFsLeaving) return;
+    if (!ganttFsElement() && state.ganttFs) {
+      state.ganttFs = false;
+      unlockOrientation();
+      render();
+    }
+  };
+  document.addEventListener("fullscreenchange", onFsChange);
+  document.addEventListener("webkitfullscreenchange", onFsChange);
 }
 
 function moveInList(list, index, dir) {

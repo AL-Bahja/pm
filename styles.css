@@ -887,6 +887,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   .gantt-toolbar, .gantt-opts { flex-wrap: wrap; white-space: normal; }
   .gantt-opts { margin-inline-start: 0; width: 100%; }
   .gantt-zoom-btns { display: flex; }
+  .show-mobile { display: inline-flex !important; }
   .gantt-wrap {
     height: min(70vh, 640px);
     max-height: none;
@@ -1063,6 +1064,86 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   font-size: 12px;
   font-weight: 700;
   color: var(--muted);
+}
+.gantt-fs-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+.show-mobile { display: none !important; }
+.gantt-rotate-hint { display: none; }
+html.gantt-fs,
+html.gantt-fs body {
+  overflow: hidden;
+  background: #fff;
+}
+html.gantt-fs .app-frame {
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr);
+}
+html.gantt-fs .app-side,
+html.gantt-fs .project-head,
+html.gantt-fs .gantt-stage > h3,
+html.gantt-fs .gantt-hint,
+html.gantt-fs .gantt-legend-box,
+html.gantt-fs .gantt-toolbar {
+  display: none !important;
+}
+html.gantt-fs .app-content,
+html.gantt-fs .page {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+html.gantt-fs .gantt-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  margin: 0;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+}
+html.gantt-fs .gantt-fs-bar {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  background: #f4f8fa;
+}
+html.gantt-fs .gantt-wrap {
+  flex: 1 1 auto;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+}
+@media (orientation: portrait) {
+  html.gantt-fs .gantt-rotate-hint {
+    display: flex;
+    position: absolute;
+    inset: 52px 0 0;
+    z-index: 6;
+    background: rgba(18, 32, 43, 0.94);
+    color: #fff;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 28px 22px;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.45;
+  }
 }
 .swatch { display: inline-block; width: 14px; height: 10px; border-radius: 4px; margin-inline-end: 6px; vertical-align: middle; }
 .swatch.planned { background: var(--planned); }
