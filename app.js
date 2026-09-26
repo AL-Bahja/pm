@@ -713,6 +713,29 @@ function todayIso() {
   return iso(new Date());
 }
 
+function isTaskDelayed(task) {
+  if (!task || isTaskComplete(task)) return false;
+  if (task.status === "delayed") return true;
+  const today = todayIso();
+  const pEnd = planEnd(task);
+  const bEnd = task.baseEnd;
+  const pStart = planStart(task);
+  const bStart = task.baseStart;
+  if (pEnd && today > pEnd) return true;
+  if (bEnd && today > bEnd) return true;
+  if (bEnd && pEnd && pEnd > bEnd) return true;
+  if (bStart && task.actualStart && task.actualStart > bStart) return true;
+  if ((isTaskActive(task) || task.status === "in_progress") && bStart && bEnd && today > bStart) {
+    const span = Math.max(1, workDaysBetween(bStart, bEnd));
+    const through = today > bEnd ? bEnd : today;
+    const elapsed = workDaysBetween(bStart, through);
+    const expected = Math.round((100 * Math.min(span, elapsed)) / span);
+    const pct = Number(task.percent || 0);
+    if (expected - pct >= 5) return true;
+  }
+  return false;
+}
+
 function isTaskActive(task) {
   if (!task) return false;
   if (isTaskComplete(task)) return false;
@@ -1961,7 +1984,7 @@ function projectView() {
               <span><i class="swatch baseline"></i>${tr("baseline")}</span>
               <span><i class="swatch planned"></i>${tr("planned")}</span>
               <span><i class="swatch actual"></i>${tr("actual")}</span>
-              <span><i class="swatch critical"></i>${tr("critical")}</span>
+              <span><i class="swatch delayed"></i>${tr("delayed")}</span>
               <span><i class="swatch milestone"></i>${tr("milestone")}</span>
             </div>
             ${ganttOptsHtml()}
@@ -2074,11 +2097,13 @@ function taskRow(project, taskItem, parent, index, label, isSub, expanded, isLas
   const count = kids && !expanded ? `<span class="sub-count">${taskItem.children.length}</span>` : "";
   const msMark = taskItem.milestone ? `<span class="ms-tag" title="${tr("milestone")}">◆</span>` : "";
   const crit = taskItem.critical ? " critical-task" : "";
-  const row = el(`<tr class="${parent ? "child-row" : "parent-row"}${crit}">
+  const late = isTaskDelayed(taskItem) ? " delayed-task" : "";
+  const statusKey = isTaskDelayed(taskItem) ? "delayed" : (taskItem.status || "not_started");
+  const row = el(`<tr class="${parent ? "child-row" : "parent-row"}${crit}${late}">
     <td data-label="#"> ${label}</td>
     <td data-label="${esc(tr("taskName"))}" class="${isSub ? "task-indent" : ""}"><span class="task-name-cell">${twist}<span class="task-title">${esc(taskItem.name)}${msMark}</span>${count}</span></td>
     ${isPm() ? `<td data-label="${esc(tr("predecessors"))}">${esc(predText(taskItem, project))}</td>` : ""}
-    <td data-label="${esc(tr("status"))}"><span class="badge ${taskItem.status}">${tr(taskItem.status)}</span></td>
+    <td data-label="${esc(tr("status"))}"><span class="badge ${statusKey}">${tr(statusKey)}</span></td>
     <td data-label="${esc(tr("percent"))}">${Number(taskItem.percent || 0)}%</td>
     <td data-label="${esc(tr("workDays"))}">${taskWorkDays(taskItem) || "—"}</td>
     <td data-label="${esc(tr("planned"))}">${fmtDate(planStart(taskItem))} → ${fmtDate(planEnd(taskItem))}</td>
@@ -2481,14 +2506,15 @@ function ganttHtml(project, opts) {
           : `<span class="twist-spacer"></span>`;
       const count = kids && !expanded ? `<span class="sub-count">${task.children.length}</span>` : "";
       const msIcon = task.milestone ? `<span class="ms-tag">◆</span>` : "";
-      const planCls = `planned${task.critical ? " critical" : ""}${kids ? " summary" : ""}`;
+      const delayed = isTaskDelayed(task);
+      const planCls = `planned${task.critical ? " critical" : ""}${kids ? " summary" : ""}${delayed ? " delayed" : ""}`;
       const planBar = task.milestone
-        ? diamondHtml(planStart(task) || planEnd(task), `plan${task.critical ? " critical" : ""}`)
+        ? diamondHtml(planStart(task) || planEnd(task), `plan${task.critical ? " critical" : ""}${delayed ? " delayed" : ""}`)
         : barHtml(planStart(task), planEnd(task), planCls, ganttFillPct(task));
       const actBar = task.milestone
-        ? diamondHtml(task.actualStart || task.actualEnd, "act")
-        : barHtml(actualBarStart(task), actualBarEnd(task), "actual");
-      return `<div class="gantt-row ${depth ? "sub" : ""} ${task.critical ? "is-critical" : ""}">
+        ? diamondHtml(task.actualStart || task.actualEnd, `act${delayed ? " delayed" : ""}`)
+        : barHtml(actualBarStart(task), actualBarEnd(task), `actual${delayed ? " delayed" : ""}`);
+      return `<div class="gantt-row ${depth ? "sub" : ""} ${task.critical ? "is-critical" : ""} ${delayed ? "is-delayed" : ""}">
         <div class="gantt-sticky-name">
           <div class="gantt-name">${twist}<span class="gantt-name-text" title="${esc(task.name)}">${esc(task.name)}${msIcon}</span>${count}</div>
           ${showPlanCol ? `<div class="gantt-col gantt-dates-p">${dateRangeHtml(planStart(task), planEnd(task), compact)}</div>` : ""}
@@ -3085,7 +3111,7 @@ function ganttEmailHtml(project) {
       return `<tr>
         <td style="padding:5px;border:1px solid #c5d0d8">${depth ? "— " : ""}${esc(task.name)}</td>
         <td style="padding:5px;border:1px solid #c5d0d8;white-space:nowrap">${fmtDate(start)} → ${fmtDate(end)}</td>
-        <td style="padding:5px;border:1px solid #c5d0d8;width:55%">${barCell(start, end, task.critical ? "#b45309" : "#0f766e")}</td>
+        <td style="padding:5px;border:1px solid #c5d0d8;width:55%">${barCell(start, end, isTaskDelayed(task) ? "#ea580c" : task.critical ? "#b45309" : "#0f766e")}</td>
       </tr>`;
     })
     .join("");

@@ -476,7 +476,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 }
 .badge.done { background: #d1fae5; color: var(--ok); }
 .badge.in_progress { background: #dbeafe; color: #1d4ed8; }
-.badge.delayed { background: #fee4e2; color: var(--danger); }
+.badge.delayed { background: #ffedd5; color: #c2410c; }
 .badge.not_started { background: #eef2f6; color: var(--muted); }
 
 .progress-wrap { display: flex; align-items: center; gap: 8px; min-width: 132px; }
@@ -711,6 +711,10 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 .bar.actual { top: 11px; height: 8px; }
 .bar.planned { background: var(--planned); }
 .bar.actual { background: var(--actual); z-index: 3; }
+.bar.actual.delayed,
+.gantt-row.is-delayed .bar.actual { background: #ea580c !important; }
+.bar.planned.delayed,
+.gantt-row.is-delayed .bar.planned:not(.critical) { background: #fb923c; }
 .bar.critical { background: #b42318; }
 .bar.summary { height: 6px; border-radius: 1px; }
 .bar-fill { display: block; height: 100%; background: rgba(255,255,255,0.4); }
@@ -720,6 +724,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 }
 .ms-mark.critical { background: #b42318; }
 .ms-mark.act { background: var(--actual); top: 12px; width: 8px; height: 8px; }
+.ms-mark.delayed { background: #ea580c; }
 .ms-tag { color: var(--teal); font-size: 12px; margin-inline-start: 0.2em; display: inline; }
 .gantt-links {
   position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none; overflow: hidden;
@@ -737,9 +742,19 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 .pred-row input, .pred-row select { width: auto; margin: 0; }
 .pred-row input[type="checkbox"] { width: 18px; height: 18px; }
 .critical-task { background: #fff7f6; }
+.delayed-task { background: #fff7ed; }
+.gantt-row.is-delayed .gantt-name,
+.gantt-row.is-delayed .gantt-col {
+  background: #fff7ed;
+}
+.gantt-row.is-delayed.is-critical .gantt-name,
+.gantt-row.is-delayed.is-critical .gantt-col {
+  background: #fff1e8;
+}
 .legend { flex-wrap: wrap; }
 .swatch.baseline { background: #cbd5e1; }
 .swatch.critical { background: #b42318; }
+.swatch.delayed { background: #ea580c; }
 .swatch.milestone { width: 10px; height: 10px; background: #64748b; transform: rotate(45deg); border-radius: 1px; }
 
 @media (max-width: 800px) {
