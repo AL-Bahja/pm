@@ -4198,7 +4198,7 @@ function profileView() {
       <label>${tr("displayNameEn")}<input name="nameEn" value="${esc(u.nameEn || "")}" ${isPm() ? "" : "disabled"}></label>
       <label>${tr("email")}<input name="email" type="email" value="${esc(u.email || "")}" ${isPm() ? "" : "disabled"}></label>
       ${isPm() ? `<label>${tr("username")}<input name="username" value="${esc(u.username)}"></label>` : `<p>${tr("username")}: <b>${esc(u.username)}</b></p>`}
-      <label>${tr("password")}<input name="password" type="text" minlength="8" value="${esc(u.password || "")}" autocomplete="off"></label>
+      ${isPm() ? `<label>${tr("password")}<input name="password" type="text" minlength="8" value="${esc(u.password || "")}" autocomplete="off"></label>` : ""}
       ${!isPm() ? `<p class="readonly-note">${tr("onlyPm")}</p>` : ""}
       <p class="error"></p>
       <button class="btn" type="submit">${tr("save")}</button>
@@ -4208,20 +4208,20 @@ function profileView() {
     e.preventDefault();
     const fd = new FormData(e.target);
     const err = box.querySelector(".error");
-    const pass = String(fd.get("password") || "");
     if (isPm()) {
       u.nameAr = String(fd.get("nameAr") || "").trim();
       u.nameEn = String(fd.get("nameEn") || "").trim();
       syncUserNames(u);
       u.email = fd.get("email");
       if (fd.get("username")) u.username = String(fd.get("username")).trim();
-    }
-    if (pass) {
-      if (isWeakPassword(pass)) {
-        err.textContent = tr("weakPassword");
-        return;
+      const pass = String(fd.get("password") || "");
+      if (pass) {
+        if (isWeakPassword(pass)) {
+          err.textContent = tr("weakPassword");
+          return;
+        }
+        u.password = pass;
       }
-      u.password = pass;
     }
     save(state.data);
     render();
