@@ -93,6 +93,9 @@ const I18N = {
     in_progress: "قيد التنفيذ",
     done: "منجزة",
     delayed: "متأخرة",
+    delayedPart: "الجزء المتأخر بعد خط الأساس",
+    ganttLegendTitle: "مفتاح ألوان المخطط",
+    legendToday: "اليوم",
     variance: "الانحراف",
     costReport: "تقرير الكلف",
     timeReport: "تقرير الزمن",
@@ -336,6 +339,9 @@ const I18N = {
     in_progress: "In progress",
     done: "Done",
     delayed: "Delayed",
+    delayedPart: "Delayed part after the baseline",
+    ganttLegendTitle: "Chart color key",
+    legendToday: "Today",
     variance: "Variance",
     costReport: "Cost report",
     timeReport: "Time report",
@@ -756,6 +762,44 @@ function actualBarEnd(task) {
     return today < start ? start : today;
   }
   return start;
+}
+
+function nextDayIso(value) {
+  const d = parseDay(value);
+  if (!d) return "";
+  d.setDate(d.getDate() + 1);
+  return iso(d);
+}
+
+function delayBarRange(task) {
+  if (!task || task.milestone || isTaskComplete(task)) return null;
+  const limit = task.baseEnd || planEnd(task);
+  if (!limit) return null;
+  const actEnd = actualBarEnd(task);
+  const pEnd = planEnd(task);
+  let delayEnd = "";
+  if (actEnd && actEnd > limit) delayEnd = actEnd;
+  if (pEnd && pEnd > limit && pEnd > delayEnd) delayEnd = pEnd;
+  if (!delayEnd || delayEnd <= limit) return null;
+  const start = nextDayIso(limit) || delayEnd;
+  if (start > delayEnd) return { start: delayEnd, end: delayEnd };
+  return { start, end: delayEnd };
+}
+
+function ganttLegendHtml() {
+  return `<div class="gantt-legend-box">
+    <h4>${tr("ganttLegendTitle")}</h4>
+    <div class="legend gantt-legend">
+      <span><i class="swatch baseline"></i>${tr("baseline")}</span>
+      <span><i class="swatch planned"></i>${tr("planned")}</span>
+      <span><i class="swatch actual"></i>${tr("actual")}</span>
+      <span><i class="swatch delayed"></i>${tr("delayedPart")}</span>
+      <span><i class="swatch critical"></i>${tr("critical")}</span>
+      <span><i class="swatch milestone"></i>${tr("milestone")}</span>
+      <span><i class="swatch today"></i>${tr("legendToday")}</span>
+      <span><i class="swatch weekend"></i>${tr("ganttShowWeekends")}</span>
+    </div>
+  </div>`;
 }
 
 function ganttFillPct(task) {
@@ -1979,14 +2023,8 @@ function projectView() {
         </section>` : tab === "gantt" ? `<section class="project-panel is-on" data-panel="gantt">
           <h3>${tr("gantt")}</h3>
           <p class="hint gantt-hint no-print">${tr("ganttSwipe")}</p>
+          ${ganttLegendHtml()}
           <div class="gantt-toolbar no-print">
-            <div class="legend">
-              <span><i class="swatch baseline"></i>${tr("baseline")}</span>
-              <span><i class="swatch planned"></i>${tr("planned")}</span>
-              <span><i class="swatch actual"></i>${tr("actual")}</span>
-              <span><i class="swatch delayed"></i>${tr("delayed")}</span>
-              <span><i class="swatch milestone"></i>${tr("milestone")}</span>
-            </div>
             ${ganttOptsHtml()}
           </div>
           <div class="card gantt-wrap">${ganttHtml(project)}</div>
@@ -2506,15 +2544,16 @@ function ganttHtml(project, opts) {
           : `<span class="twist-spacer"></span>`;
       const count = kids && !expanded ? `<span class="sub-count">${task.children.length}</span>` : "";
       const msIcon = task.milestone ? `<span class="ms-tag">◆</span>` : "";
-      const delayed = isTaskDelayed(task);
-      const planCls = `planned${task.critical ? " critical" : ""}${kids ? " summary" : ""}${delayed ? " delayed" : ""}`;
+      const delay = delayBarRange(task);
+      const planCls = `planned${task.critical ? " critical" : ""}${kids ? " summary" : ""}`;
       const planBar = task.milestone
-        ? diamondHtml(planStart(task) || planEnd(task), `plan${task.critical ? " critical" : ""}${delayed ? " delayed" : ""}`)
+        ? diamondHtml(planStart(task) || planEnd(task), `plan${task.critical ? " critical" : ""}`)
         : barHtml(planStart(task), planEnd(task), planCls, ganttFillPct(task));
       const actBar = task.milestone
-        ? diamondHtml(task.actualStart || task.actualEnd, `act${delayed ? " delayed" : ""}`)
-        : barHtml(actualBarStart(task), actualBarEnd(task), `actual${delayed ? " delayed" : ""}`);
-      return `<div class="gantt-row ${depth ? "sub" : ""} ${task.critical ? "is-critical" : ""} ${delayed ? "is-delayed" : ""}">
+        ? diamondHtml(task.actualStart || task.actualEnd, "act")
+        : barHtml(actualBarStart(task), actualBarEnd(task), "actual");
+      const delayBar = delay ? barHtml(delay.start, delay.end, "delayed-seg") : "";
+      return `<div class="gantt-row ${depth ? "sub" : ""} ${task.critical ? "is-critical" : ""}">
         <div class="gantt-sticky-name">
           <div class="gantt-name">${twist}<span class="gantt-name-text" title="${esc(task.name)}">${esc(task.name)}${msIcon}</span>${count}</div>
           ${showPlanCol ? `<div class="gantt-col gantt-dates-p">${dateRangeHtml(planStart(task), planEnd(task), compact)}</div>` : ""}
@@ -2525,6 +2564,7 @@ function ganttHtml(project, opts) {
           ${barHtml(task.baseStart, task.baseEnd, "baseline")}
           ${planBar}
           ${actBar}
+          ${delayBar}
         </div>
       </div>`;
     })
@@ -3631,6 +3671,7 @@ function reportsView() {
     </div>`}
     ${single && state.reportShowGantt ? `<section class="report-gantt-page print-sheet" data-print-sheet="gantt">
       <h3>${tr("gantt")}</h3>
+      ${ganttLegendHtml()}
       <div class="card gantt-wrap report-gantt">${ganttHtml(list[0], { compact: true, width: printGanttWidth() })}</div>
     </section>` : ""}
     ${single ? `<section class="report-tasks-page print-sheet" data-print-sheet="tasks">
