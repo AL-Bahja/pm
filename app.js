@@ -213,7 +213,9 @@ const I18N = {
     googleHint: "من أي حاسبة: اربط جوجل درايف بحساب الشركة picassomega86@gmail.com (هذا التخزين المشترك). بعد ذلك يظهر دخول النظام: مدير المشاريع أو مستخدم آخر.",
     googleWrongAccount: "يفضّل استخدام حساب درايف الشركة:",
     driveFolder: "مجلد التطبيق",
-    ganttSwipe: "اسحب المخطط يميناً ويساراً. اسم المهمة فوق الشريط.",
+    ganttSwipe: "نفس عرض الحاسبة: اسحب للتمرير، وإصبعان أو الأزرار للتكبير.",
+    ganttZoomOut: "تصغير",
+    ganttZoomIn: "تكبير",
     ganttRowLines: "خطوط أفقية لتحديد المهام",
     ganttShowWeekends: "أيام العطل",
     ganttShowPlan: "التواريخ المتوقعة",
@@ -459,7 +461,9 @@ const I18N = {
     googleHint: "On any PC, connect Google Drive with the company account picassomega86@gmail.com (shared storage). Then sign in as project manager or another user.",
     googleWrongAccount: "Prefer the company Drive account:",
     driveFolder: "App folder",
-    ganttSwipe: "Swipe the chart sideways. The task name sits above its bars.",
+    ganttSwipe: "Same layout as desktop: swipe to pan, pinch or use the buttons to zoom.",
+    ganttZoomOut: "Zoom out",
+    ganttZoomIn: "Zoom in",
     ganttRowLines: "Horizontal lines to track task rows",
     ganttShowWeekends: "Non-working days",
     ganttShowPlan: "Planned dates",
@@ -2047,6 +2051,11 @@ function projectView() {
           ${ganttLegendHtml()}
           <div class="gantt-toolbar no-print">
             ${ganttOptsHtml()}
+            <div class="gantt-zoom-btns">
+              <button type="button" class="btn small secondary" data-zoom-out title="${esc(tr("ganttZoomOut"))}">−</button>
+              <span class="gantt-zoom-label" data-zoom-label>50%</span>
+              <button type="button" class="btn small secondary" data-zoom-in title="${esc(tr("ganttZoomIn"))}">+</button>
+            </div>
           </div>
           <div class="card gantt-wrap">${ganttHtml(project)}</div>
         </section>` : tab === "files" ? `<section class="project-panel is-on" data-panel="files">
@@ -2439,8 +2448,8 @@ function ganttOptsHtml() {
   return `<div class="gantt-opts">
     <label class="chk"><input type="checkbox" data-gantt-opt="ganttRowLines" ${state.ganttRowLines ? "checked" : ""}> ${tr("ganttRowLines")}</label>
     <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowWeekends" ${state.ganttShowWeekends ? "checked" : ""}> ${tr("ganttShowWeekends")}</label>
-    <label class="chk hide-mobile"><input type="checkbox" data-gantt-opt="ganttShowPlan" ${state.ganttShowPlan ? "checked" : ""}> ${tr("ganttShowPlan")}</label>
-    <label class="chk hide-mobile"><input type="checkbox" data-gantt-opt="ganttShowActual" ${state.ganttShowActual ? "checked" : ""}> ${tr("ganttShowActual")}</label>
+    <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowPlan" ${state.ganttShowPlan ? "checked" : ""}> ${tr("ganttShowPlan")}</label>
+    <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowActual" ${state.ganttShowActual ? "checked" : ""}> ${tr("ganttShowActual")}</label>
   </div>`;
 }
 
@@ -2468,20 +2477,17 @@ function ganttHtml(project, opts) {
   computeCritical(project);
   const compact = !!(opts && opts.compact);
   const mobile = window.matchMedia("(max-width: 800px)").matches;
-  const phone = mobile && !compact;
-  const targetW = Number(opts && opts.width) || (phone
-    ? Math.max(280, Math.min((window.innerWidth || 360) - 28, 440))
-    : compact ? 670 : 980);
-  const nameW = phone ? 0 : compact ? Math.min(160, ganttNameColWidth(project, true)) : ganttNameColWidth(project, false);
-  const showPlanCol = !phone && !!state.ganttShowPlan && (!mobile || compact);
-  const showActCol = !phone && !!state.ganttShowActual && (!mobile || compact);
+  const targetW = Number(opts && opts.width) || (compact ? 670 : 980);
+  const nameW = compact ? Math.min(160, ganttNameColWidth(project, true)) : ganttNameColWidth(project, false);
+  const showPlanCol = !!state.ganttShowPlan;
+  const showActCol = !!state.ganttShowActual;
   const showWeekends = state.ganttShowWeekends !== false;
-  const dateW = compact ? 72 : 132;
+  const dateW = compact ? 72 : mobile ? 110 : 132;
   const planW = showPlanCol ? dateW : 0;
   const actW = showActCol ? dateW : 0;
   const lockW = nameW + planW + actW;
   const inner = Math.max(180, targetW - lockW);
-  const sparse = compact || phone ? fitGanttCols(project, inner, phone ? 16 : 10) : null;
+  const sparse = compact ? fitGanttCols(project, inner, 10) : null;
   const cols = sparse && sparse.length ? sparse : null;
   const dates = cols && cols.length ? cols.map((c) => c.date) : collectDates(project);
   if (!dates.length) return `<p class="muted">—</p>`;
@@ -2489,8 +2495,8 @@ function ganttHtml(project, opts) {
   const max = cols ? cols[cols.length - 1].date : new Date(Math.max(...dates));
   const days = cols ? cols.map((c) => c.date) : enumerateDays(min, max);
   const colCount = Math.max(days.length, 1);
-  const dayW = compact || phone ? Math.max(10, Math.floor(inner / colCount)) : mobile ? 14 : 16;
-  const rowH = phone ? 36 : mobile ? 28 : 24;
+  const dayW = compact ? Math.max(10, Math.floor(inner / colCount)) : 16;
+  const rowH = 24;
   const headH = 48;
   const scaleW = colCount * dayW;
   const years = groupDays(days, (d) => String(d.getFullYear()));
@@ -2623,11 +2629,11 @@ function ganttHtml(project, opts) {
     });
   });
   const svgH = headH + vis.length * rowH;
-  const svg = !phone && links.length
+  const svg = links.length
     ? `<svg class="gantt-links" width="${lockW + scaleW}" height="${svgH}" viewBox="0 0 ${lockW + scaleW} ${svgH}" preserveAspectRatio="none">${links.join("")}</svg>`
     : "";
 
-  return `<div class="gantt${phone ? " gantt-phone" : ""}${compact ? " gantt-compact" : ""}${state.ganttRowLines ? " gantt-row-lines" : ""}" style="--day-w:${dayW}px;--name-w:${phone ? 0 : nameW}px;--plan-w:${planW}px;--act-w:${actW}px;--date-w:${dateW}px;--lock-w:${lockW}px;width:${phone ? "100%" : (lockW + scaleW) + "px"};max-width:100%">
+  return `<div class="gantt${compact ? " gantt-compact" : ""}${state.ganttRowLines ? " gantt-row-lines" : ""}" style="--day-w:${dayW}px;--name-w:${nameW}px;--plan-w:${planW}px;--act-w:${actW}px;--date-w:${dateW}px;--lock-w:${lockW}px;width:${lockW + scaleW}px">
     <div class="gantt-scroll">
       <div class="gantt-head">
         <div class="gantt-sticky-name">
@@ -2647,7 +2653,62 @@ function ganttHtml(project, opts) {
   </div>`;
 }
 
-function bindGanttScroll() {}
+function bindGanttScroll(box) {
+  if (!box) return;
+  const wrap = box.querySelector(".gantt-wrap:not(.report-gantt)");
+  const gantt = wrap && wrap.querySelector(".gantt");
+  if (!wrap || !gantt) return;
+  const phone = window.matchMedia("(max-width: 800px)").matches;
+  const key = KEY + "-ganttZoom";
+  const minZ = 0.4;
+  const maxZ = 2.5;
+  const defZ = phone ? 0.5 : 1;
+  let z = Number(localStorage.getItem(key));
+  if (!Number.isFinite(z) || z < minZ || z > maxZ) z = defZ;
+  const useCssZoom = typeof CSS !== "undefined" && CSS.supports && CSS.supports("zoom", "0.5");
+  const label = box.querySelector("[data-zoom-label]");
+  const apply = () => {
+    if (useCssZoom) {
+      gantt.style.zoom = String(z);
+      gantt.style.transform = "";
+      gantt.style.marginInlineEnd = "";
+      gantt.style.marginBottom = "";
+    } else {
+      gantt.style.zoom = "";
+      gantt.style.transformOrigin = "top left";
+      gantt.style.transform = `scale(${z})`;
+      const w = gantt.offsetWidth;
+      const h = gantt.offsetHeight;
+      gantt.style.marginInlineEnd = `${Math.max(0, w * (z - 1))}px`;
+      gantt.style.marginBottom = `${Math.max(0, h * (z - 1))}px`;
+    }
+    if (label) label.textContent = `${Math.round(z * 100)}%`;
+    try { localStorage.setItem(key, String(z)); } catch (e) {}
+  };
+  const setZ = (next) => {
+    z = Math.min(maxZ, Math.max(minZ, next));
+    apply();
+  };
+  apply();
+  const out = box.querySelector("[data-zoom-out]");
+  const inn = box.querySelector("[data-zoom-in]");
+  if (out) out.onclick = () => setZ(z - 0.15);
+  if (inn) inn.onclick = () => setZ(z + 0.15);
+  let dist0 = 0;
+  let z0 = z;
+  wrap.addEventListener("touchstart", (e) => {
+    if (e.touches.length === 2) {
+      dist0 = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      z0 = z;
+    }
+  }, { passive: true });
+  wrap.addEventListener("touchmove", (e) => {
+    if (e.touches.length !== 2 || !dist0) return;
+    e.preventDefault();
+    const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    setZ(z0 * (d / dist0));
+  }, { passive: false });
+}
 
 function moveInList(list, index, dir) {
   const next = index + dir;
