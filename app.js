@@ -2663,7 +2663,7 @@ function ganttHtml(project, opts) {
     ? `<svg class="gantt-links" width="${lockW + scaleW}" height="${svgH}" viewBox="0 0 ${lockW + scaleW} ${svgH}" preserveAspectRatio="none">${links.join("")}</svg>`
     : "";
 
-  return `<div class="gantt${compact ? " gantt-compact" : ""}${state.ganttRowLines ? " gantt-row-lines" : ""}" style="--day-w:${dayW}px;--name-w:${nameW}px;--plan-w:${planW}px;--act-w:${actW}px;--date-w:${dateW}px;--lock-w:${lockW}px;width:${lockW + scaleW}px">
+  return `<div class="gantt${compact ? " gantt-compact" : ""}${state.ganttRowLines ? " gantt-row-lines" : ""}" style="--day-w:${dayW}px;--name-w:${nameW}px;--plan-w:${planW}px;--act-w:${actW}px;--date-w:${dateW}px;--lock-w:${lockW}px">
     <div class="gantt-scroll">
       <div class="gantt-head">
         <div class="gantt-sticky-name">
@@ -2725,7 +2725,12 @@ function bindGanttScroll(box) {
   const label = box.querySelector("[data-zoom-label]");
   const apply = () => {
     if (useCssZoom) {
-      gantt.style.zoom = String(z);
+      gantt.style.zoom = Math.abs(z - 1) < 0.02 ? "" : String(z);
+      gantt.style.transform = "";
+      gantt.style.marginInlineEnd = "";
+      gantt.style.marginBottom = "";
+    } else if (Math.abs(z - 1) < 0.02) {
+      gantt.style.zoom = "";
       gantt.style.transform = "";
       gantt.style.marginInlineEnd = "";
       gantt.style.marginBottom = "";
