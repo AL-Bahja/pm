@@ -2919,6 +2919,7 @@ function ganttHtml(project, opts) {
 
   return `<div class="gantt${compact ? " gantt-compact" : ""}${state.ganttRowLines ? " gantt-row-lines" : ""}" style="--day-w:${dayW}px;--name-w:${nameW}px;--plan-w:${planW}px;--act-w:${actW}px;--date-w:${dateW}px;--lock-w:${lockW}px">
     <div class="gantt-scroll">
+      <div class="gantt-canvas">
       <div class="gantt-head">
         <div class="gantt-sticky-name">
           <div class="gantt-name">${tr("taskName")}</div>
@@ -2933,6 +2934,7 @@ function ganttHtml(project, opts) {
       </div>
       ${rows}
       ${svg}
+      </div>
     </div>
   </div>`;
 }
@@ -2967,7 +2969,8 @@ function bindGanttScroll(box) {
   if (!box) return;
   const wrap = box.querySelector(".gantt-wrap:not(.report-gantt)");
   const gantt = wrap && wrap.querySelector(".gantt");
-  if (!wrap || !gantt) return;
+  const canvas = wrap && wrap.querySelector(".gantt-canvas");
+  if (!wrap || !gantt || !canvas) return;
   const phone = window.matchMedia("(max-width: 800px)").matches;
   const key = KEY + (state.ganttFs ? "-ganttZoomFs" : "-ganttZoom");
   const minZ = 0.4;
@@ -2977,25 +2980,29 @@ function bindGanttScroll(box) {
   if (!Number.isFinite(z) || z < minZ || z > maxZ) z = defZ;
   const useCssZoom = typeof CSS !== "undefined" && CSS.supports && CSS.supports("zoom", "0.5");
   const label = box.querySelector("[data-zoom-label]");
+  const clearZoom = (el) => {
+    el.style.zoom = "";
+    el.style.transform = "";
+    el.style.marginInlineEnd = "";
+    el.style.marginBottom = "";
+  };
   const apply = () => {
+    clearZoom(gantt);
     if (useCssZoom) {
-      gantt.style.zoom = Math.abs(z - 1) < 0.02 ? "" : String(z);
-      gantt.style.transform = "";
-      gantt.style.marginInlineEnd = "";
-      gantt.style.marginBottom = "";
+      canvas.style.zoom = Math.abs(z - 1) < 0.02 ? "" : String(z);
+      canvas.style.transform = "";
+      canvas.style.marginInlineEnd = "";
+      canvas.style.marginBottom = "";
     } else if (Math.abs(z - 1) < 0.02) {
-      gantt.style.zoom = "";
-      gantt.style.transform = "";
-      gantt.style.marginInlineEnd = "";
-      gantt.style.marginBottom = "";
+      clearZoom(canvas);
     } else {
-      gantt.style.zoom = "";
-      gantt.style.transformOrigin = "top left";
-      gantt.style.transform = `scale(${z})`;
-      const w = gantt.offsetWidth;
-      const h = gantt.offsetHeight;
-      gantt.style.marginInlineEnd = `${Math.max(0, w * (z - 1))}px`;
-      gantt.style.marginBottom = `${Math.max(0, h * (z - 1))}px`;
+      canvas.style.zoom = "";
+      canvas.style.transformOrigin = "top left";
+      canvas.style.transform = `scale(${z})`;
+      const w = canvas.offsetWidth;
+      const h = canvas.offsetHeight;
+      canvas.style.marginInlineEnd = `${Math.max(0, w * (z - 1))}px`;
+      canvas.style.marginBottom = `${Math.max(0, h * (z - 1))}px`;
     }
     if (label) label.textContent = `${Math.round(z * 100)}%`;
     try { localStorage.setItem(key, String(z)); } catch (e) {}
