@@ -568,10 +568,22 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   margin-top: -1px;
 }
 .gantt-row-lines .gantt-row .gantt-name,
-.gantt-row-lines .gantt-row .gantt-col,
-.gantt-row-lines .gantt-track {
+.gantt-row-lines .gantt-row .gantt-col {
   box-shadow: inset 0 1px 0 #c5d0d8, inset 0 -1px 0 #c5d0d8;
 }
+.gantt-row-lines .gantt-track::before,
+.gantt-row-lines .gantt-track::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #c5d0d8;
+  z-index: 2;
+  pointer-events: none;
+}
+.gantt-row-lines .gantt-track::before { top: 0; }
+.gantt-row-lines .gantt-track::after { bottom: 0; }
 .gantt-name, .gantt-col {
   display: flex;
   align-items: center;

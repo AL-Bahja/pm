@@ -229,6 +229,7 @@ const I18N = {
     ganttFsExit: "إغلاق",
     ganttRowLines: "خطوط أفقية لتحديد المهام",
     ganttShowWeekends: "أيام العطل",
+    ganttShowLinks: "خطوط الاعتماديات",
     ganttShowPlan: "التواريخ المتوقعة",
     ganttShowActual: "التواريخ الفعلية",
     sendPdf: "إرسال PDF",
@@ -488,6 +489,7 @@ const I18N = {
     ganttFsExit: "Close",
     ganttRowLines: "Horizontal lines to track task rows",
     ganttShowWeekends: "Non-working days",
+    ganttShowLinks: "Dependency lines",
     ganttShowPlan: "Planned dates",
     ganttShowActual: "Actual dates",
     sendPdf: "Send PDF",
@@ -1522,6 +1524,7 @@ const state = {
   theme: localStorage.getItem(KEY + "-theme") || "teal",
   ganttRowLines: localStorage.getItem(KEY + "-ganttRowLines") !== "off" && localStorage.getItem(KEY + "-gantt-rows") !== "off",
   ganttShowWeekends: localStorage.getItem(KEY + "-ganttShowWeekends") !== "off",
+  ganttShowLinks: localStorage.getItem(KEY + "-ganttShowLinks") !== "off",
   ganttShowPlan: localStorage.getItem(KEY + "-ganttShowPlan") !== "off",
   ganttShowActual: localStorage.getItem(KEY + "-ganttShowActual") !== "off",
   ganttFs: false,
@@ -2672,6 +2675,7 @@ function ganttOptsHtml() {
   return `<div class="gantt-opts">
     <label class="chk"><input type="checkbox" data-gantt-opt="ganttRowLines" ${state.ganttRowLines ? "checked" : ""}> ${tr("ganttRowLines")}</label>
     <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowWeekends" ${state.ganttShowWeekends ? "checked" : ""}> ${tr("ganttShowWeekends")}</label>
+    <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowLinks" ${state.ganttShowLinks ? "checked" : ""}> ${tr("ganttShowLinks")}</label>
     <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowPlan" ${state.ganttShowPlan ? "checked" : ""}> ${tr("ganttShowPlan")}</label>
     <label class="chk"><input type="checkbox" data-gantt-opt="ganttShowActual" ${state.ganttShowActual ? "checked" : ""}> ${tr("ganttShowActual")}</label>
   </div>`;
@@ -2863,7 +2867,7 @@ function ganttHtml(project, opts) {
     });
   });
   const svgH = headH + vis.length * rowH;
-  const svg = links.length
+  const svg = state.ganttShowLinks !== false && links.length
     ? `<svg class="gantt-links" width="${lockW + scaleW}" height="${svgH}" viewBox="0 0 ${lockW + scaleW} ${svgH}" preserveAspectRatio="none">${links.join("")}</svg>`
     : "";
 
