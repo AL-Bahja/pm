@@ -1007,7 +1007,7 @@ function predText(task, project) {
   const list = flattenTasks(project);
   const bits = (task.preds || [])
     .map((p) => {
-      const idx = list.findIndex((x) => x.id === p.id);
+      const idx = list.findIndex((x) => sameTaskId(x.id, p.id));
       if (idx < 0) return "";
       const lag = Number(p.lag || 0);
       const lagS = lag ? (lag > 0 ? `+${lag}` : String(lag)) : "";
@@ -1097,58 +1097,53 @@ function linkFreeFloat(pred, succ, link) {
   return workFloat(need, actual);
 }
 
+function sameTaskId(a, b) {
+  return a != null && b != null && String(a) === String(b);
+}
+
 function computeCritical(project) {
   const all = flattenTasks(project);
   all.forEach((t) => {
     t.critical = false;
     t.slack = "";
   });
-  const tasks = all.filter((t) => !hasChildren(t) && t.plannedStart);
-  if (!tasks.length) return;
+  const dated = all.filter((t) => t.plannedStart);
+  if (!dated.length) return;
   const succsOf = (t) => {
     const succs = [];
-    tasks.forEach((s) => {
+    all.forEach((s) => {
       (s.preds || []).forEach((p) => {
-        if (p.id === t.id) succs.push({ task: s, link: p });
+        if (sameTaskId(p.id, t.id)) succs.push({ task: s, link: p });
       });
     });
     return succs;
   };
-  const projectEnd = maxDate(tasks.map((x) => x.plannedEnd || x.plannedStart));
-  const tf = {};
-  tasks.forEach((t) => {
-    tf[t.id] = 9999;
-  });
-  for (let n = 0; n < tasks.length + 8; n++) {
-    let changed = false;
-    tasks.forEach((t) => {
-      const succs = succsOf(t);
-      let next;
-      if (!succs.length) {
-        next = workFloat(t.plannedEnd || t.plannedStart, projectEnd);
-      } else {
-        next = Math.min(
-          ...succs.map(({ task: s, link }) => linkFreeFloat(t, s, link) + (tf[s.id] == null ? 9999 : tf[s.id]))
-        );
-      }
-      if (next !== tf[t.id]) {
-        tf[t.id] = next;
-        changed = true;
-      }
-    });
-    if (!changed) break;
-  }
-  tasks.forEach((t) => {
-    const succs = succsOf(t);
-    const slack = Number.isFinite(tf[t.id]) ? tf[t.id] : "";
-    t.slack = slack;
-    t.critical = slack <= 0 && !isTaskComplete(t) && ((t.preds || []).length > 0 || succs.length > 0);
+  const projectEnd = maxDate(dated.map((x) => x.plannedEnd || x.plannedStart));
+  dated.forEach((t) => {
+    if (hasChildren(t)) return;
+    if (isTaskComplete(t)) {
+      t.slack = "";
+      t.critical = false;
+      return;
+    }
+    const succs = succsOf(t).filter(({ task: s }) => !isTaskComplete(s));
+    let slack;
+    if (!succs.length) {
+      slack = workFloat(t.plannedEnd || t.plannedStart, projectEnd);
+    } else {
+      slack = Math.min(...succs.map(({ task: s, link }) => linkFreeFloat(t, s, link)));
+    }
+    t.slack = Number.isFinite(slack) ? slack : "";
+    t.critical = t.slack !== "" && t.slack <= 0 && ((t.preds || []).length > 0 || succs.length > 0);
   });
   all.forEach((t) => {
     if (hasChildren(t) && (t.children || []).some((c) => c.critical)) t.critical = true;
   });
   all.forEach((t) => {
-    if (isTaskComplete(t)) t.critical = false;
+    if (isTaskComplete(t)) {
+      t.critical = false;
+      t.slack = "";
+    }
   });
 }
 
@@ -2893,12 +2888,12 @@ function ganttHtml(project, opts) {
 
   const idToRow = {};
   vis.forEach((row, i) => {
-    idToRow[row.task.id] = i;
+    idToRow[String(row.task.id)] = i;
   });
   const links = [];
   vis.forEach((row, si) => {
     (row.task.preds || []).forEach((p) => {
-      const pi = idToRow[p.id];
+      const pi = idToRow[String(p.id)];
       if (pi == null) return;
       const pred = vis[pi].task;
       const type = p.type || "FS";
