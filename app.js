@@ -102,7 +102,7 @@ const I18N = {
     in_progress: "قيد التنفيذ",
     done: "منجزة",
     delayed: "متأخرة",
-    delayedPart: "الجزء المتأخر بعد خط الأساس",
+    delayedPart: "متأخر مع بقاء لون قيد التنفيذ",
     ganttLegendTitle: "مفتاح ألوان المخطط",
     legendToday: "اليوم",
     variance: "الانحراف",
@@ -361,7 +361,7 @@ const I18N = {
     in_progress: "In progress",
     done: "Done",
     delayed: "Delayed",
-    delayedPart: "Delayed part after the baseline",
+    delayedPart: "Overdue, while keeping the in-progress color",
     ganttLegendTitle: "Chart color key",
     legendToday: "Today",
     variance: "Variance",
@@ -862,9 +862,9 @@ function ganttLegendHtml() {
     <div class="legend gantt-legend">
       <span><i class="swatch baseline"></i>${tr("baseline")}</span>
       <span><i class="swatch planned"></i>${tr("planned")}</span>
-      <span><i class="swatch actual"></i>${tr("actual")}</span>
-      <span><i class="swatch running"></i>${tr("in_progress")}</span>
-      <span><i class="swatch delayed"></i>${tr("delayedPart")}</span>
+      <span><i class="swatch progress"></i>${tr("in_progress")}</span>
+      <span><i class="swatch done"></i>${tr("done")}</span>
+      <span><i class="swatch delayed"></i>${tr("delayed")}</span>
       <span><i class="swatch critical"></i>${tr("critical")}</span>
       <span><i class="swatch milestone"></i>${tr("milestone")}</span>
       <span><i class="swatch today"></i>${tr("legendToday")}</span>
@@ -873,18 +873,16 @@ function ganttLegendHtml() {
   </details>`;
 }
 
-function ganttFillPct(task) {
+function ganttProgressPct(task) {
   if (isTaskComplete(task)) return 100;
   if (!isTaskActive(task) && task.status !== "in_progress") return 0;
-  const start = planStart(task);
+  return Math.max(0, Math.min(100, Number(task.percent || 0)));
+}
+
+function isGanttOverdue(task) {
+  if (!task || isTaskComplete(task) || !isTaskActive(task)) return false;
   const end = planEnd(task);
-  const today = todayIso();
-  if (!start || !end) return Number(task.percent || 0);
-  if (today <= start) return 0;
-  if (today >= end) return 100;
-  const total = Math.max(1, workDaysBetween(start, end));
-  const done = workDaysBetween(start, today);
-  return Math.max(1, Math.min(100, Math.round((100 * done) / total)));
+  return !!(end && todayIso() > end);
 }
 
 function planStart(task) {
@@ -2788,7 +2786,8 @@ function ganttHtml(project, opts) {
     const left = Math.max(0, i1) * dayW;
     const width = Math.max(1, i2 - i1 + 1) * dayW;
     const fill = pct > 0 ? `<i class="bar-fill" style="width:${Math.min(100, pct)}%"></i>` : "";
-    return `<div class="bar ${cls}" style="left:${left}px;width:${width}px" title="${fmtDate(start)} → ${fmtDate(end)}">${fill}</div>`;
+    const warn = /\boverdue\b/.test(cls) ? `<i class="bar-warn" title="${esc(tr("delayed"))}"></i>` : "";
+    return `<div class="bar ${cls}" style="left:${left}px;width:${width}px" title="${fmtDate(start)} → ${fmtDate(end)}">${fill}${warn}</div>`;
   };
   const diamondHtml = (date, cls) => {
     const i = idxOf(date);
@@ -2807,19 +2806,26 @@ function ganttHtml(project, opts) {
           : `<span class="twist-spacer"></span>`;
       const count = kids && !expanded ? `<span class="sub-count">${task.children.length}</span>` : "";
       const msIcon = task.milestone ? `<span class="ms-tag">◆</span>` : "";
-      const delay = delayBarRange(task);
       const hidePlan = skipPlanBar(task);
-      const planCls = `planned${task.critical ? " critical" : ""}${kids ? " summary" : ""}`;
-      const planBar = hidePlan
-        ? ""
-        : task.milestone
-        ? diamondHtml(planStart(task) || planEnd(task), `plan${task.critical ? " critical" : ""}`)
-        : barHtml(planStart(task), planEnd(task), planCls, ganttFillPct(task));
-      const running = isTaskActive(task) && !isTaskComplete(task);
-      const actBar = task.milestone
-        ? diamondHtml(task.actualStart || task.actualEnd, `act${running ? " running" : ""}`)
-        : barHtml(actualBarStart(task), actualBarEnd(task), `actual${running ? " running" : ""}`);
-      const delayBar = delay ? barHtml(delay.start, delay.end, "delayed-seg") : "";
+      const crit = task.critical ? " critical-ring" : "";
+      const overdue = isGanttOverdue(task) ? " overdue" : "";
+      const sum = kids ? " summary" : "";
+      let statusBar = "";
+      if (task.milestone) {
+        if (isTaskComplete(task)) {
+          statusBar = diamondHtml(task.actualStart || task.actualEnd || planEnd(task), `done${crit}`);
+        } else if (isTaskActive(task)) {
+          statusBar = diamondHtml(task.actualStart || planStart(task), `progress${crit}${overdue}`);
+        } else if (!hidePlan) {
+          statusBar = diamondHtml(planStart(task) || planEnd(task), `planned-empty${crit}`);
+        }
+      } else if (isTaskComplete(task)) {
+        statusBar = barHtml(actualBarStart(task) || planStart(task), actualBarEnd(task) || planEnd(task), `status done${crit}${sum}`, 100);
+      } else if (isTaskActive(task)) {
+        statusBar = barHtml(actualBarStart(task), actualBarEnd(task), `status progress${crit}${overdue}${sum}`, ganttProgressPct(task));
+      } else if (!hidePlan) {
+        statusBar = barHtml(planStart(task), planEnd(task), `status planned-empty${crit}${sum}`, 0);
+      }
       return `<div class="gantt-row ${depth ? "sub" : ""} ${task.critical ? "is-critical" : ""}">
         <div class="gantt-sticky-name">
           <div class="gantt-name">${twist}<span class="gantt-name-text" title="${esc(task.name)}">${esc(task.name)}${msIcon}</span>${count}</div>
@@ -2829,9 +2835,7 @@ function ganttHtml(project, opts) {
         <div class="gantt-track" style="width:${scaleW}px">
           ${weekendMarks}${monthLines}${todayMark}
           ${barHtml(task.baseStart, task.baseEnd, "baseline")}
-          ${planBar}
-          ${actBar}
-          ${delayBar}
+          ${statusBar}
         </div>
       </div>`;
     })
