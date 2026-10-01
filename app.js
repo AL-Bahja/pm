@@ -857,8 +857,9 @@ function delayBarRange(task) {
   return { start, end: delayEnd };
 }
 
-function ganttLegendHtml(open) {
-  return `<details class="gantt-legend-box"${open ? " open" : ""}>
+function ganttLegendHtml() {
+  const phone = window.matchMedia("(max-width: 800px)").matches;
+  return `<details class="gantt-legend-box"${phone ? "" : " open"}>
     <summary>${tr("ganttLegendTitle")}</summary>
     <div class="legend gantt-legend">
       <span><i class="swatch baseline"></i>${tr("baseline")}</span>
@@ -2317,8 +2318,8 @@ function projectView() {
               <button type="button" class="btn small secondary" data-zoom-in title="${esc(tr("ganttZoomIn"))}">+</button>
             </div>
             ${ganttOptsHtml()}
-            ${ganttLegendHtml(false)}
           </div>
+          ${ganttLegendHtml()}
           <div class="card gantt-wrap">${ganttHtml(project)}</div>
         </section>` : tab === "files" ? `<section class="project-panel is-on" data-panel="files">
           <h3>${tr("projectFiles")}</h3>
@@ -4087,7 +4088,7 @@ function reportsView() {
     </div>`}
     ${single && state.reportShowGantt ? `<section class="report-gantt-page print-sheet" data-print-sheet="gantt">
       <h3>${tr("gantt")}</h3>
-      ${ganttLegendHtml(true)}
+      ${ganttLegendHtml()}
       <div class="card gantt-wrap report-gantt">${ganttHtml(list[0], { compact: true, width: printGanttWidth() })}</div>
     </section>` : ""}
     ${single ? `<section class="report-tasks-page print-sheet" data-print-sheet="tasks">

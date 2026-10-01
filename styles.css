@@ -1135,6 +1135,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   border: 1px solid var(--line);
   border-radius: 12px;
 }
+.gantt-legend-box h4,
 .gantt-legend-box summary {
   margin: 0 0 8px;
   font-size: 13px;
@@ -1199,34 +1200,6 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   font-size: 12px;
   font-weight: 700;
   color: var(--muted);
-}
-.gantt-toolbar .gantt-legend-box {
-  position: relative;
-  margin: 0;
-  padding: 2px 8px;
-  flex: 0 0 auto;
-  z-index: 12;
-}
-.gantt-toolbar .gantt-legend-box summary {
-  margin: 0;
-  font-size: 12px;
-  white-space: nowrap;
-}
-.gantt-toolbar .gantt-legend-box[open] summary { margin: 0; }
-.gantt-toolbar .gantt-legend-box .legend {
-  position: absolute;
-  top: calc(100% + 4px);
-  inset-inline-end: 0;
-  min-width: 220px;
-  max-width: min(420px, 70vw);
-  padding: 8px 10px;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: var(--shadow);
-  white-space: normal;
-  flex-wrap: wrap;
-  z-index: 13;
 }
 .gantt-fs-bar {
   display: flex;
