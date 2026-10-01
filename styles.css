@@ -718,11 +718,19 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 .bar.planned { background: var(--planned); }
 .bar.actual { background: var(--actual); z-index: 3; }
 .bar.actual.running {
-  background: repeating-linear-gradient(
+  background-image: repeating-linear-gradient(
     -45deg,
-    #1d4ed8 0 5px,
-    #f8fafc 5px 10px
+    #1d4ed8 0 6px,
+    #f8fafc 6px 12px
   );
+  background-size: 17px 17px;
+  animation: gantt-run 0.7s linear infinite;
+}
+@keyframes gantt-run {
+  to { background-position: 17px 0; }
+}
+@media print, (prefers-reduced-motion: reduce) {
+  .bar.actual.running { animation: none; }
 }
 .bar.delayed-seg {
   background: #ea580c;

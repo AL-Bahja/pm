@@ -2808,11 +2808,13 @@ function ganttHtml(project, opts) {
       const count = kids && !expanded ? `<span class="sub-count">${task.children.length}</span>` : "";
       const msIcon = task.milestone ? `<span class="ms-tag">◆</span>` : "";
       const delay = delayBarRange(task);
+      const hidePlan = skipPlanBar(task);
       const planCls = `planned${task.critical ? " critical" : ""}${kids ? " summary" : ""}`;
-      const planPct = skipPlanBar(task) ? 0 : ganttFillPct(task);
-      const planBar = task.milestone
+      const planBar = hidePlan
+        ? ""
+        : task.milestone
         ? diamondHtml(planStart(task) || planEnd(task), `plan${task.critical ? " critical" : ""}`)
-        : barHtml(planStart(task), planEnd(task), planCls, planPct);
+        : barHtml(planStart(task), planEnd(task), planCls, ganttFillPct(task));
       const running = isTaskActive(task) && !isTaskComplete(task);
       const actBar = task.milestone
         ? diamondHtml(task.actualStart || task.actualEnd, `act${running ? " running" : ""}`)
