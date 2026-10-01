@@ -1142,10 +1142,13 @@ function computeCritical(project) {
     const succs = succsOf(t);
     const slack = Number.isFinite(tf[t.id]) ? tf[t.id] : "";
     t.slack = slack;
-    t.critical = slack <= 0 && ((t.preds || []).length > 0 || succs.length > 0);
+    t.critical = slack <= 0 && !isTaskComplete(t) && ((t.preds || []).length > 0 || succs.length > 0);
   });
   all.forEach((t) => {
     if (hasChildren(t) && (t.children || []).some((c) => c.critical)) t.critical = true;
+  });
+  all.forEach((t) => {
+    if (isTaskComplete(t)) t.critical = false;
   });
 }
 
