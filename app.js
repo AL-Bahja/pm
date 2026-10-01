@@ -19,8 +19,17 @@ const I18N = {
     logout: "خروج",
     confirmLogout: "هل تريد تسجيل الخروج؟",
     confirmDelete: "هل تريد الحذف؟ لا يمكن التراجع عن ذلك.",
-    confirmDeleteTask: "هل تريد حذف هذه المهمة؟",
-    confirmDeleteProject: "هل تريد حذف هذا المشروع؟",
+    confirmDeleteTask: "ستُنقل المهمة إلى سلة المهملات. يمكن استعادتها لاحقاً.",
+    confirmDeleteProject: "سيُنقل المشروع إلى سلة المهملات. يمكن استعادته لاحقاً.",
+    confirmPurge: "حذف نهائي لا يمكن التراجع عنه. هل تريد المتابعة؟",
+    trash: "سلة المهملات",
+    trashEmpty: "سلة المهملات فارغة.",
+    trashProjects: "مشاريع محذوفة",
+    trashTasks: "مهام محذوفة",
+    restore: "استعادة",
+    purge: "حذف نهائي",
+    deletedAt: "تاريخ الحذف",
+    fromProject: "من مشروع",
     addProject: "إضافة مشروع",
     editProject: "تعديل المشروع",
     copyProject: "نسخ المشروع",
@@ -269,8 +278,17 @@ const I18N = {
     logout: "Log out",
     confirmLogout: "Sign out?",
     confirmDelete: "Delete this item? This cannot be undone.",
-    confirmDeleteTask: "Delete this task?",
-    confirmDeleteProject: "Delete this project?",
+    confirmDeleteTask: "This task will move to the trash. You can restore it later.",
+    confirmDeleteProject: "This project will move to the trash. You can restore it later.",
+    confirmPurge: "Permanently delete? This cannot be undone.",
+    trash: "Trash",
+    trashEmpty: "Trash is empty.",
+    trashProjects: "Deleted projects",
+    trashTasks: "Deleted tasks",
+    restore: "Restore",
+    purge: "Delete forever",
+    deletedAt: "Deleted on",
+    fromProject: "From project",
     addProject: "Add project",
     editProject: "Edit project",
     copyProject: "Copy project",
@@ -792,6 +810,29 @@ function actualBarEnd(task) {
   return start;
 }
 
+function liveBarStart(task) {
+  if (!task) return "";
+  if (task.actualStart || isTaskComplete(task) || isTaskActive(task)) {
+    return actualBarStart(task) || planStart(task);
+  }
+  return planStart(task);
+}
+
+function liveBarEnd(task) {
+  if (!task) return "";
+  if (task.actualEnd || isTaskComplete(task) || isTaskActive(task)) {
+    return actualBarEnd(task) || planEnd(task);
+  }
+  return planEnd(task);
+}
+
+function skipPlanBar(task) {
+  if (!task || !isTaskComplete(task)) return false;
+  const a0 = task.actualStart;
+  const p0 = planStart(task);
+  return !!(a0 && p0 && a0 < p0);
+}
+
 function nextDayIso(value) {
   const d = parseDay(value);
   if (!d) return "";
@@ -1275,11 +1316,15 @@ function seed() {
       { id: "u1", username: "manager", password: "manager123", role: "pm", deviceScope: "all", roleTitle: "", name: "مدير المشاريع", nameAr: "مدير المشاريع", nameEn: "Project Manager", email: "picassomega86@gmail.com" },
       { id: "u2", username: "viewer", password: "viewer123", role: "other", deviceScope: "all", roleTitle: "مراقب ميداني", name: "مراقب ميداني", nameAr: "مراقب ميداني", nameEn: "Field watcher", email: "" }
     ],
-    projects: []
+    projects: [],
+    trash: { projects: [], tasks: [] }
   };
 }
 
 function migrate(data) {
+  if (!data.trash || typeof data.trash !== "object") data.trash = { projects: [], tasks: [] };
+  if (!Array.isArray(data.trash.projects)) data.trash.projects = [];
+  if (!Array.isArray(data.trash.tasks)) data.trash.tasks = [];
   if (!Array.isArray(data.devices) || !data.devices.length) data.devices = defaultDevices();
   if (!Array.isArray(data.holidays)) data.holidays = [];
   (data.holidays || []).forEach((h) => {
@@ -1361,6 +1406,11 @@ function compactData(data) {
       task.costFiles = [];
       (task.children || []).forEach(walk);
     });
+  });
+  (copy.trash && copy.trash.projects || []).forEach((p) => {
+    p.docFiles = slim(p.docFiles || p.files);
+    p.costFiles = slim(p.costFiles);
+    p.files = p.docFiles;
   });
   return copy;
 }
@@ -1527,6 +1577,56 @@ function visibleProjects() {
   const list = state.data.projects || [];
   if (!u || !u.deviceScope || u.deviceScope === "all") return list;
   return list.filter((p) => p.device === u.deviceScope);
+}
+
+function canSeeDevice(deviceId) {
+  const u = currentUser();
+  if (!u || !u.deviceScope || u.deviceScope === "all") return true;
+  return deviceId === u.deviceScope;
+}
+
+function trashStore() {
+  if (!state.data.trash || typeof state.data.trash !== "object") state.data.trash = { projects: [], tasks: [] };
+  if (!Array.isArray(state.data.trash.projects)) state.data.trash.projects = [];
+  if (!Array.isArray(state.data.trash.tasks)) state.data.trash.tasks = [];
+  return state.data.trash;
+}
+
+function snapshot(obj) {
+  return JSON.parse(JSON.stringify(obj || {}));
+}
+
+function moveProjectToTrash(project) {
+  const t = trashStore();
+  const copy = snapshot(project);
+  copy.deletedAt = new Date().toISOString();
+  t.projects.unshift(copy);
+  state.data.projects = (state.data.projects || []).filter((p) => p.id !== project.id);
+}
+
+function moveTaskToTrash(project, taskItem, parent) {
+  const t = trashStore();
+  t.tasks.unshift({
+    id: uid(),
+    projectId: project.id,
+    projectName: project.name || "",
+    parentId: parent ? parent.id : "",
+    parentName: parent ? parent.name : "",
+    device: project.device || "",
+    task: snapshot(taskItem),
+    deletedAt: new Date().toISOString()
+  });
+  if (parent) parent.children = (parent.children || []).filter((x) => x.id !== taskItem.id);
+  else project.tasks = (project.tasks || []).filter((x) => x.id !== taskItem.id);
+}
+
+function findTaskInProject(project, id) {
+  if (!project || !id) return null;
+  for (const t of project.tasks || []) {
+    if (t.id === id) return t;
+    for (const c of t.children || []) if (c.id === id) return c;
+  }
+  return null;
 }
 
 function canOpenProject(project) {
@@ -1881,6 +1981,7 @@ function shellView(user) {
         <button class="side-link${goOn("projects")}" type="button" data-go="projects">${tr("projects")}</button>
         <button class="side-link${goOn("reports")}" type="button" data-go="reports">${tr("reports")}</button>
         ${isCompanyPm() ? `<button class="side-link${goOn("users")}" type="button" data-go="users">${tr("users")}</button>` : ""}
+        ${isPm() ? `<button class="side-link${goOn("trash")}" type="button" data-go="trash">${tr("trash")}</button>` : ""}
         <button class="side-link${goOn("profile")}" type="button" data-go="profile">${tr("profile")}</button>
       </nav>
       ${project ? `<div class="side-group">
@@ -1930,10 +2031,104 @@ function shellView(user) {
   if (state.view === "project") main.append(projectView());
   if (state.view === "reports") main.append(reportsView());
   if (state.view === "users") main.append(usersView());
+  if (state.view === "trash") main.append(isPm() ? trashView() : projectsView());
   if (state.view === "profile") main.append(profileView());
   if (state.modal) main.append(state.modal);
   return wrap;
 }
+
+function trashView() {
+  const store = trashStore();
+  const projects = (store.projects || []).filter((p) => canSeeDevice(p.device));
+  const tasks = (store.tasks || []).filter((x) => canSeeDevice(x.device));
+  const box = el(`<div>
+    <h2>${tr("trash")}</h2>
+    ${!projects.length && !tasks.length ? `<p class="muted">${tr("trashEmpty")}</p>` : ""}
+    <h3>${tr("trashProjects")}</h3>
+    <div class="card table-scroll" style="padding:8px 16px; margin-bottom:18px">
+      <table class="stack-table">
+        <thead><tr><th>${tr("projectName")}</th><th>${tr("deletedAt")}</th><th></th></tr></thead>
+        <tbody data-tp></tbody>
+      </table>
+    </div>
+    <h3>${tr("trashTasks")}</h3>
+    <div class="card table-scroll" style="padding:8px 16px">
+      <table class="stack-table">
+        <thead><tr><th>${tr("taskName")}</th><th>${tr("fromProject")}</th><th>${tr("deletedAt")}</th><th></th></tr></thead>
+        <tbody data-tt></tbody>
+      </table>
+    </div>
+  </div>`);
+  const tp = box.querySelector("[data-tp]");
+  if (!projects.length) tp.append(el(`<tr class="empty-row"><td colspan="3">${tr("trashEmpty")}</td></tr>`));
+  projects.forEach((p) => {
+    const row = el(`<tr>
+      <td data-label="${esc(tr("projectName"))}">${esc(p.name)}</td>
+      <td data-label="${esc(tr("deletedAt"))}">${esc(fmtDate((p.deletedAt || "").slice(0, 10)))}</td>
+      <td class="row actions">
+        <button class="btn small" data-restore-p>${tr("restore")}</button>
+        <button class="btn small danger" data-purge-p>${tr("purge")}</button>
+      </td>
+    </tr>`);
+    row.querySelector("[data-restore-p]").onclick = () => {
+      const item = snapshot(p);
+      delete item.deletedAt;
+      state.data.projects.push(item);
+      store.projects = store.projects.filter((x) => x.id !== p.id);
+      save(state.data);
+      render();
+    };
+    row.querySelector("[data-purge-p]").onclick = () => {
+      if (!confirm(tr("confirmPurge"))) return;
+      store.projects = store.projects.filter((x) => x.id !== p.id);
+      save(state.data);
+      render();
+    };
+    tp.append(row);
+  });
+  const tt = box.querySelector("[data-tt]");
+  if (!tasks.length) tt.append(el(`<tr class="empty-row"><td colspan="4">${tr("trashEmpty")}</td></tr>`));
+  tasks.forEach((item) => {
+    const row = el(`<tr>
+      <td data-label="${esc(tr("taskName"))}">${esc(item.task && item.task.name)}</td>
+      <td data-label="${esc(tr("fromProject"))}">${esc(item.projectName)}</td>
+      <td data-label="${esc(tr("deletedAt"))}">${esc(fmtDate((item.deletedAt || "").slice(0, 10)))}</td>
+      <td class="row actions">
+        <button class="btn small" data-restore-t>${tr("restore")}</button>
+        <button class="btn small danger" data-purge-t>${tr("purge")}</button>
+      </td>
+    </tr>`);
+    row.querySelector("[data-restore-t]").onclick = () => {
+      const project = (state.data.projects || []).find((p) => p.id === item.projectId);
+      if (!project) {
+        alert(tr("chooseProject"));
+        return;
+      }
+      const task = snapshot(item.task);
+      const parent = item.parentId ? findTaskInProject(project, item.parentId) : null;
+      if (parent) {
+        parent.children = parent.children || [];
+        parent.children.push(task);
+      } else {
+        project.tasks = project.tasks || [];
+        project.tasks.push(task);
+      }
+      store.tasks = store.tasks.filter((x) => x.id !== item.id);
+      rollupProject(project);
+      save(state.data);
+      render();
+    };
+    row.querySelector("[data-purge-t]").onclick = () => {
+      if (!confirm(tr("confirmPurge"))) return;
+      store.tasks = store.tasks.filter((x) => x.id !== item.id);
+      save(state.data);
+      render();
+    };
+    tt.append(row);
+  });
+  return box;
+}
+
 function projectsView() {
   const box = el(`<div>
     <h2>${tr("summary")}</h2>
@@ -2049,9 +2244,9 @@ function projectView() {
       <div class="row no-print">
         <button class="btn secondary" data-rep>${tr("projectReport")}</button>
         ${isPm() ? `<button class="btn secondary" data-base>${tr("setBaseline")}</button>
-        <button class="btn danger hide-mobile" data-reset-dates>${tr("resetDates")}</button>
+        <button class="btn danger" data-reset-dates>${tr("resetDates")}</button>
         <button class="btn secondary hide-mobile" data-copy>${tr("copyProject")}</button>
-        <button class="btn danger hide-mobile" data-delp>${tr("delete")}</button>` : ""}
+        <button class="btn danger" data-delp>${tr("delete")}</button>` : ""}
       </div>
     </div>
     <div class="project-main">${
@@ -2177,9 +2372,10 @@ function projectView() {
   const delp = box.querySelector("[data-delp]");
   if (delp) delp.onclick = () => {
     if (!confirm(tr("confirmDeleteProject"))) return;
-    state.data.projects = state.data.projects.filter((p) => p.id !== project.id);
+    moveProjectToTrash(project);
     save(state.data);
     state.view = "projects";
+    state.projectId = null;
     render();
   };
   return box;
@@ -2211,11 +2407,11 @@ function taskRow(project, taskItem, parent, index, label, isSub, expanded, isLas
     <td class="hide-mobile" data-label="${esc(tr("actualCost"))}">${money(taskItem.actualCost)}</td>
     ${(() => { const n = varianceOf(taskItem); return `<td class="${varClass(n)} hide-mobile" data-label="${esc(tr("variance"))}">${varText(n)}</td>`; })()}
     ${isPm() ? `<td class="row actions">
-      <button class="btn small secondary hide-mobile" data-up>${tr("up")}</button>
-      <button class="btn small secondary hide-mobile" data-down>${tr("down")}</button>
+      <button class="btn small secondary" data-up>${tr("up")}</button>
+      <button class="btn small secondary" data-down>${tr("down")}</button>
       ${!isSub ? `<button class="btn small secondary hide-mobile" data-sub>${tr("addSubtask")}</button>` : ""}
       <button class="btn small" data-ed>${tr("editTask")}</button>
-      <button class="btn small danger hide-mobile" data-del>${tr("delete")}</button>
+      <button class="btn small danger" data-del>${tr("delete")}</button>
     </td>` : ""}
   </tr>`);
   if (isPm()) {
@@ -2227,8 +2423,7 @@ function taskRow(project, taskItem, parent, index, label, isSub, expanded, isLas
     row.querySelector("[data-ed]").onclick = () => openTaskForm(project, taskItem, parent);
     row.querySelector("[data-del]").onclick = () => {
       if (!confirm(tr("confirmDeleteTask"))) return;
-      if (parent) parent.children = parent.children.filter((x) => x.id !== taskItem.id);
-      else project.tasks = project.tasks.filter((x) => x.id !== taskItem.id);
+      moveTaskToTrash(project, taskItem, parent);
       rollupProject(project);
       save(state.data);
       render();
@@ -2612,8 +2807,11 @@ function ganttHtml(project, opts) {
       const count = kids && !expanded ? `<span class="sub-count">${task.children.length}</span>` : "";
       const msIcon = task.milestone ? `<span class="ms-tag">◆</span>` : "";
       const delay = delayBarRange(task);
+      const hidePlan = skipPlanBar(task);
       const planCls = `planned${task.critical ? " critical" : ""}${kids ? " summary" : ""}`;
-      const planBar = task.milestone
+      const planBar = hidePlan
+        ? ""
+        : task.milestone
         ? diamondHtml(planStart(task) || planEnd(task), `plan${task.critical ? " critical" : ""}`)
         : barHtml(planStart(task), planEnd(task), planCls, ganttFillPct(task));
       const actBar = task.milestone
@@ -2628,7 +2826,7 @@ function ganttHtml(project, opts) {
         </div>
         <div class="gantt-track" style="width:${scaleW}px">
           ${weekendMarks}${monthLines}${todayMark}
-          ${barHtml(task.baseStart, task.baseEnd, "baseline")}
+          ${hidePlan ? "" : barHtml(task.baseStart, task.baseEnd, "baseline")}
           ${planBar}
           ${actBar}
           ${delayBar}
@@ -2648,8 +2846,8 @@ function ganttHtml(project, opts) {
       if (pi == null) return;
       const pred = vis[pi].task;
       const type = p.type || "FS";
-      const x1 = xOf(type === "SS" || type === "SF" ? planStart(pred) : planEnd(pred) || planStart(pred), type === "SS" || type === "SF" ? "start" : "end");
-      const x2 = xOf(type === "FF" || type === "SF" ? planEnd(row.task) || planStart(row.task) : planStart(row.task), type === "FF" || type === "SF" ? "end" : "start");
+      const x1 = xOf(type === "SS" || type === "SF" ? liveBarStart(pred) : liveBarEnd(pred) || liveBarStart(pred), type === "SS" || type === "SF" ? "start" : "end");
+      const x2 = xOf(type === "FF" || type === "SF" ? liveBarEnd(row.task) || liveBarStart(row.task) : liveBarStart(row.task), type === "FF" || type === "SF" ? "end" : "start");
       if (x1 == null || x2 == null) return;
       const y1 = headH + pi * rowH + rowH / 2;
       const y2 = headH + si * rowH + rowH / 2;

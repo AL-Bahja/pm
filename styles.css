@@ -964,7 +964,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   }
   .task-cards td.task-name-td::before { display: none; }
   .task-cards .task-title { font-size: 15px; font-weight: 700; }
-  .task-cards td.actions .btn { flex: 1 1 100%; }
+  .task-cards td.actions .btn { flex: 1 1 calc(50% - 6px); }
   .stack-table .progress-wrap { min-width: 0; flex: 1; }
   .stack-table tr.empty-row { box-shadow: none; }
   .stack-table tr.empty-row td { display: block; }
