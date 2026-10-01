@@ -857,9 +857,8 @@ function delayBarRange(task) {
   return { start, end: delayEnd };
 }
 
-function ganttLegendHtml() {
-  const phone = window.matchMedia("(max-width: 800px)").matches;
-  return `<details class="gantt-legend-box"${phone ? "" : " open"}>
+function ganttLegendHtml(open) {
+  return `<details class="gantt-legend-box"${open ? " open" : ""}>
     <summary>${tr("ganttLegendTitle")}</summary>
     <div class="legend gantt-legend">
       <span><i class="swatch baseline"></i>${tr("baseline")}</span>
@@ -2310,19 +2309,15 @@ function projectView() {
             </tbody>
           </table>
         </section>` : tab === "gantt" ? `<section class="project-panel is-on gantt-stage" data-panel="gantt" data-gantt-stage>
-          <div class="gantt-fs-bar no-print">
-            <button type="button" class="btn show-mobile" data-gantt-fs>${tr("ganttFs")}</button>
+          <div class="gantt-toolbar no-print">
+            <button type="button" class="btn small show-mobile" data-gantt-fs>${tr("ganttFs")}</button>
             <div class="gantt-zoom-btns">
               <button type="button" class="btn small secondary" data-zoom-out title="${esc(tr("ganttZoomOut"))}">−</button>
               <span class="gantt-zoom-label" data-zoom-label>50%</span>
               <button type="button" class="btn small secondary" data-zoom-in title="${esc(tr("ganttZoomIn"))}">+</button>
             </div>
-          </div>
-          <h3>${tr("gantt")}</h3>
-          <p class="hint gantt-hint no-print">${tr("ganttSwipe")}</p>
-          ${ganttLegendHtml()}
-          <div class="gantt-toolbar no-print">
             ${ganttOptsHtml()}
+            ${ganttLegendHtml(false)}
           </div>
           <div class="card gantt-wrap">${ganttHtml(project)}</div>
         </section>` : tab === "files" ? `<section class="project-panel is-on" data-panel="files">
@@ -4092,7 +4087,7 @@ function reportsView() {
     </div>`}
     ${single && state.reportShowGantt ? `<section class="report-gantt-page print-sheet" data-print-sheet="gantt">
       <h3>${tr("gantt")}</h3>
-      ${ganttLegendHtml()}
+      ${ganttLegendHtml(true)}
       <div class="card gantt-wrap report-gantt">${ganttHtml(list[0], { compact: true, width: printGanttWidth() })}</div>
     </section>` : ""}
     ${single ? `<section class="report-tasks-page print-sheet" data-print-sheet="tasks">
