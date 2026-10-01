@@ -771,15 +771,21 @@ function isTaskDelayed(task) {
   if (!task || isTaskComplete(task)) return false;
   if (task.status === "delayed") return true;
   const today = todayIso();
-  const pEnd = planEnd(task);
-  const bEnd = task.baseEnd;
-  const pStart = planStart(task);
-  const bStart = task.baseStart;
-  if (pEnd && today > pEnd) return true;
-  if (bEnd && today > bEnd) return true;
+  const bEnd = task.baseEnd || "";
+  const bStart = task.baseStart || "";
+  const pEnd = task.plannedEnd || "";
+  const pStart = task.plannedStart || "";
+  const dueEnd = bEnd || pEnd;
+  const dueStart = bStart || pStart;
+  const started = isTaskActive(task) || task.status === "in_progress";
+  if (!started) {
+    if (dueStart && today < dueStart) return false;
+    return !!(dueEnd && today > dueEnd);
+  }
+  if (dueEnd && today > dueEnd) return true;
   if (bEnd && pEnd && pEnd > bEnd) return true;
   if (bStart && task.actualStart && task.actualStart > bStart) return true;
-  if ((isTaskActive(task) || task.status === "in_progress") && bStart && bEnd && today > bStart) {
+  if (bStart && bEnd && today > bStart) {
     const span = Math.max(1, workDaysBetween(bStart, bEnd));
     const through = today > bEnd ? bEnd : today;
     const elapsed = workDaysBetween(bStart, through);
@@ -883,7 +889,7 @@ function ganttProgressPct(task) {
 
 function isGanttOverdue(task) {
   if (!task || isTaskComplete(task) || !isTaskActive(task)) return false;
-  const end = planEnd(task);
+  const end = task.baseEnd || task.plannedEnd;
   return !!(end && todayIso() > end);
 }
 
