@@ -253,7 +253,7 @@ textarea { min-height: 80px; resize: vertical; }
   min-width: 0;
   min-height: 0;
   height: 100%;
-  overflow: hidden;
+  overflow: auto;
   display: flex;
   flex-direction: column;
 }
@@ -268,24 +268,23 @@ textarea { min-height: 80px; resize: vertical; }
 .page:has(.gantt-stage) {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: auto;
 }
 .page:has(.gantt-stage) .project-head { flex: 0 0 auto; }
 .page:has(.gantt-stage) .project-main {
-  flex: 1;
+  flex: 1 0 auto;
   min-width: 0;
-  min-height: 0;
+  min-height: min(70vh, 720px);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
-.gantt-stage {
-  flex: 1;
+.gantt-stage.project-panel.is-on {
+  display: flex !important;
+  flex: 1 0 auto;
   min-width: 0;
-  min-height: 0;
-  display: flex;
+  min-height: min(70vh, 720px);
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 .gantt-stage > :not(.gantt-wrap) { flex: 0 0 auto; }
 .table-scroll { overflow: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
@@ -516,13 +515,14 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 
 .gantt-wrap {
   padding: 0 0 8px;
-  overflow: hidden;
-  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: visible;
+  flex: 1 0 auto;
   height: auto;
-  min-height: 240px;
-  display: flex;
-  flex-direction: column;
+  min-height: min(70vh, 720px);
+  display: block;
   min-width: 0;
+  max-width: 100%;
 }
 .gantt-hint { display: none; margin: 0 0 8px; }
 .gantt {
@@ -531,35 +531,32 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   --lock-w: calc(var(--name-w) + var(--date-w) + var(--date-w));
   --row-h: 24px;
   --head-h: 48px;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
+  display: block;
+  flex: 0 0 auto;
   min-width: 0;
-  min-height: 0;
   width: 100%;
   max-width: 100%;
-  overflow: hidden;
+  overflow: visible;
   direction: ltr;
 }
 .gantt-scroll {
   position: relative;
-  flex: 1;
   min-width: 0;
-  min-height: 0;
-  overflow: scroll;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: scroll;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  overscroll-behavior-x: contain;
   touch-action: pan-x pan-y;
-  padding-bottom: 8px;
+  padding-bottom: 12px;
   scrollbar-width: auto;
-  scrollbar-gutter: stable;
   scrollbar-color: #8aa0ad #e8eef2;
 }
 .gantt-canvas {
   position: relative;
   width: max-content;
-  min-width: 100%;
-  flex: 0 0 auto;
+  min-width: max-content;
 }
 .gantt-scroll::-webkit-scrollbar {
   height: 16px;
@@ -1006,23 +1003,27 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
   .gantt-zoom-btns { display: flex; }
   .show-mobile { display: inline-flex !important; }
   .gantt-wrap {
-    flex: 1 1 auto;
+    flex: 1 0 auto;
     height: auto;
     max-height: none;
-    min-height: 220px;
-    overflow: hidden;
+    min-height: 70vh;
+    overflow-x: hidden;
+    overflow-y: visible;
     touch-action: pan-x pan-y;
     padding-bottom: 8px;
   }
   .gantt {
     width: 100%;
     max-width: 100%;
-    overflow: hidden;
+    overflow: visible;
   }
   .gantt-scroll {
-    overflow: scroll;
-    flex: 1;
+    overflow-x: scroll;
+    overflow-y: visible;
+    flex: none;
     min-height: 0;
+    width: 100%;
+    max-width: 100%;
     touch-action: pan-x pan-y;
   }
   .gantt-day { font-size: 9px; }
@@ -1241,17 +1242,20 @@ html.gantt-land .gantt-land-layer .gantt-wrap {
   border-radius: 0;
   border: 0;
   box-shadow: none;
-  overflow: hidden;
+  overflow: auto;
 }
-html.gantt-land .gantt-land-layer .gantt,
+html.gantt-land .gantt-land-layer .gantt {
+  display: block;
+  height: auto;
+  overflow: visible;
+}
 html.gantt-land .gantt-land-layer .gantt-scroll {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
+  overflow-x: scroll;
+  overflow-y: auto;
   min-height: 0;
-  overflow: hidden;
+  height: 100%;
+  max-height: 100%;
 }
-html.gantt-land .gantt-land-layer .gantt-scroll { overflow: scroll; }
 @media (max-width: 800px) and (orientation: portrait) {
   html.gantt-land .gantt-land-layer {
     top: 0;
