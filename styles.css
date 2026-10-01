@@ -717,6 +717,13 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 .bar.actual { top: 11px; height: 8px; }
 .bar.planned { background: var(--planned); }
 .bar.actual { background: var(--actual); z-index: 3; }
+.bar.actual.running {
+  background: repeating-linear-gradient(
+    -45deg,
+    #1d4ed8 0 5px,
+    #f8fafc 5px 10px
+  );
+}
 .bar.delayed-seg {
   background: #ea580c;
   top: 11px;
@@ -733,6 +740,7 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 }
 .ms-mark.critical { background: #b42318; }
 .ms-mark.act { background: var(--actual); top: 12px; width: 8px; height: 8px; }
+.ms-mark.act.running { background: #1d4ed8; }
 .ms-mark.delayed { background: #ea580c; }
 .ms-tag { color: var(--teal); font-size: 12px; margin-inline-start: 0.2em; display: inline; }
 .gantt-links {
@@ -756,6 +764,13 @@ th, td { text-align: start; padding: 10px 8px; border-bottom: 1px solid var(--li
 .swatch.baseline { background: #cbd5e1; }
 .swatch.critical { background: #b42318; }
 .swatch.delayed { background: #ea580c; }
+.swatch.running {
+  background: repeating-linear-gradient(
+    -45deg,
+    #1d4ed8 0 4px,
+    #f8fafc 4px 8px
+  );
+}
 .swatch.today {
   width: 10px;
   background: rgba(2, 132, 199, 0.16);

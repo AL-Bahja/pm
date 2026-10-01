@@ -863,6 +863,7 @@ function ganttLegendHtml() {
       <span><i class="swatch baseline"></i>${tr("baseline")}</span>
       <span><i class="swatch planned"></i>${tr("planned")}</span>
       <span><i class="swatch actual"></i>${tr("actual")}</span>
+      <span><i class="swatch running"></i>${tr("in_progress")}</span>
       <span><i class="swatch delayed"></i>${tr("delayedPart")}</span>
       <span><i class="swatch critical"></i>${tr("critical")}</span>
       <span><i class="swatch milestone"></i>${tr("milestone")}</span>
@@ -2807,16 +2808,15 @@ function ganttHtml(project, opts) {
       const count = kids && !expanded ? `<span class="sub-count">${task.children.length}</span>` : "";
       const msIcon = task.milestone ? `<span class="ms-tag">◆</span>` : "";
       const delay = delayBarRange(task);
-      const hidePlan = skipPlanBar(task);
       const planCls = `planned${task.critical ? " critical" : ""}${kids ? " summary" : ""}`;
-      const planBar = hidePlan
-        ? ""
-        : task.milestone
+      const planPct = skipPlanBar(task) ? 0 : ganttFillPct(task);
+      const planBar = task.milestone
         ? diamondHtml(planStart(task) || planEnd(task), `plan${task.critical ? " critical" : ""}`)
-        : barHtml(planStart(task), planEnd(task), planCls, ganttFillPct(task));
+        : barHtml(planStart(task), planEnd(task), planCls, planPct);
+      const running = isTaskActive(task) && !isTaskComplete(task);
       const actBar = task.milestone
-        ? diamondHtml(task.actualStart || task.actualEnd, "act")
-        : barHtml(actualBarStart(task), actualBarEnd(task), "actual");
+        ? diamondHtml(task.actualStart || task.actualEnd, `act${running ? " running" : ""}`)
+        : barHtml(actualBarStart(task), actualBarEnd(task), `actual${running ? " running" : ""}`);
       const delayBar = delay ? barHtml(delay.start, delay.end, "delayed-seg") : "";
       return `<div class="gantt-row ${depth ? "sub" : ""} ${task.critical ? "is-critical" : ""}">
         <div class="gantt-sticky-name">
@@ -2826,7 +2826,7 @@ function ganttHtml(project, opts) {
         </div>
         <div class="gantt-track" style="width:${scaleW}px">
           ${weekendMarks}${monthLines}${todayMark}
-          ${hidePlan ? "" : barHtml(task.baseStart, task.baseEnd, "baseline")}
+          ${barHtml(task.baseStart, task.baseEnd, "baseline")}
           ${planBar}
           ${actBar}
           ${delayBar}
