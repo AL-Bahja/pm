@@ -1065,6 +1065,38 @@ function applyDependencies(project) {
   rollupProject(project);
 }
 
+function workFloat(fromIso, toIso) {
+  if (!fromIso || !toIso || fromIso >= toIso) return 0;
+  return Math.max(0, workDaysBetween(fromIso, toIso) - 1);
+}
+
+function linkFreeFloat(pred, succ, link) {
+  const type = String((link && link.type) || "FS").toUpperCase();
+  const lag = Number((link && link.lag) || 0);
+  const pS = pred.plannedStart;
+  const pE = pred.plannedEnd || pred.plannedStart;
+  const sS = succ.plannedStart;
+  const sE = succ.plannedEnd || succ.plannedStart;
+  let need = "";
+  let actual = "";
+  if (type === "SS") {
+    need = addWorkDaysIso(pS, lag);
+    actual = sS;
+  } else if (type === "FF") {
+    need = addWorkDaysIso(pE, lag);
+    actual = sE;
+  } else if (type === "SF") {
+    need = addWorkDaysIso(pS, lag);
+    actual = sE;
+  } else {
+    need = addWorkDaysIso(pE, 1 + lag);
+    actual = sS;
+  }
+  if (!need || !actual) return 0;
+  if (actual <= need) return 0;
+  return workFloat(need, actual);
+}
+
 function computeCritical(project) {
   const all = flattenTasks(project);
   all.forEach((t) => {
@@ -1072,34 +1104,45 @@ function computeCritical(project) {
     t.slack = "";
   });
   const tasks = all.filter((t) => !hasChildren(t) && t.plannedStart);
-  tasks.forEach((t) => {
+  if (!tasks.length) return;
+  const succsOf = (t) => {
     const succs = [];
     tasks.forEach((s) => {
       (s.preds || []).forEach((p) => {
-        if (p.id === t.id) succs.push(s);
+        if (p.id === t.id) succs.push({ task: s, link: p });
       });
     });
-    if (!succs.length) {
-      const projectEnd = maxDate(tasks.map((x) => x.plannedEnd || x.plannedStart));
-      const slackEnd = daysBetween(t.plannedEnd || t.plannedStart, projectEnd);
-      t.slack = slackEnd;
-      t.critical = slackEnd <= 0 && (t.preds || []).length > 0;
-      return;
-    }
-    let slack = 9999;
-    succs.forEach((s) => {
-      const link = (s.preds || []).find((p) => p.id === t.id) || { type: "FS", lag: 0 };
-      const lag = Number(link.lag || 0);
-      const type = link.type || "FS";
-      let allowed;
-      if (type === "FS") allowed = daysBetween(t.plannedEnd || t.plannedStart, addDaysIso(s.plannedStart, -1)) - lag;
-      else if (type === "SS") allowed = daysBetween(t.plannedStart, s.plannedStart) - lag;
-      else if (type === "FF") allowed = daysBetween(t.plannedEnd || t.plannedStart, s.plannedEnd || s.plannedStart) - lag;
-      else allowed = daysBetween(t.plannedStart, s.plannedEnd || s.plannedStart) - lag;
-      slack = Math.min(slack, allowed);
+    return succs;
+  };
+  const projectEnd = maxDate(tasks.map((x) => x.plannedEnd || x.plannedStart));
+  const tf = {};
+  tasks.forEach((t) => {
+    tf[t.id] = 9999;
+  });
+  for (let n = 0; n < tasks.length + 8; n++) {
+    let changed = false;
+    tasks.forEach((t) => {
+      const succs = succsOf(t);
+      let next;
+      if (!succs.length) {
+        next = workFloat(t.plannedEnd || t.plannedStart, projectEnd);
+      } else {
+        next = Math.min(
+          ...succs.map(({ task: s, link }) => linkFreeFloat(t, s, link) + (tf[s.id] == null ? 9999 : tf[s.id]))
+        );
+      }
+      if (next !== tf[t.id]) {
+        tf[t.id] = next;
+        changed = true;
+      }
     });
-    t.slack = Number.isFinite(slack) ? slack : "";
-    t.critical = slack <= 0 && (t.preds || []).length + succs.length > 0;
+    if (!changed) break;
+  }
+  tasks.forEach((t) => {
+    const succs = succsOf(t);
+    const slack = Number.isFinite(tf[t.id]) ? tf[t.id] : "";
+    t.slack = slack;
+    t.critical = slack <= 0 && ((t.preds || []).length > 0 || succs.length > 0);
   });
   all.forEach((t) => {
     if (hasChildren(t) && (t.children || []).some((c) => c.critical)) t.critical = true;
